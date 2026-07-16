@@ -1,0 +1,10 @@
+{
+  "name": "Stub + offset (demo)",
+  "description": "One 90-degree stub-up, then a 30-degree offset (two equal bends with a 180-degree roll between them). A simple mixed job to show the format and the pipeline.",
+  "units": "uncalibrated machine units - firmware treats values as raw steps until calibration",
+  "bends": [
+    { "advance": 300, "rotate": 0,   "angle": 90 },
+    { "advance": 400, "rotate": 90,  "angle": 30 },
+    { "advance": 150, "rotate": 180, "angle": 30 }
+  ]
+}

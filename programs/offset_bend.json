@@ -1,0 +1,9 @@
+{
+  "name": "Offset bend",
+  "description": "A 30-degree offset: two equal bends in opposite directions to step the conduit run sideways around an obstacle. One of the standard bends an electrician makes by hand - here in the same (advance, rotate, angle) format the BIM pipeline will emit.",
+  "units": "uncalibrated machine units - firmware treats values as raw steps until calibration",
+  "bends": [
+    { "advance": 250, "rotate": 0,   "angle": 30 },
+    { "advance": 120, "rotate": 180, "angle": 30 }
+  ]
+}

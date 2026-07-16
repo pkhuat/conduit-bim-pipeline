@@ -29,9 +29,23 @@ Or the smaller hand-built check case:
 python3 bim/process.py bim/samples/conduit_dtv.ifc
 ```
 
+## Drive the (simulated) machine
+The machine job runs end to end through a software model of the firmware — no
+hardware, nothing moves:
+```bash
+python3 demo.py bim/samples/conduit_dtv.ifc   # IFC -> recipe -> bent in the simulator
+python3 run_stick_job.py --run 1              # drive any run through the sim
+python3 run_stick_job.py --all                # drive the whole building
+```
+`machine/commands.py` defines the ClearCore command interface (the firmware's own
+grammar); `SimMachine` implements it as a firmware model, so the full BIM → recipe →
+machine path is exercised in software. Driving **real** hardware uses the same
+command interface with a serial-backed transport (kept in the machine's own repo).
+
 ## Tests
 ```bash
-python3 bim/test_extract_conduit.py                  # 33 tests
+python3 bim/test_extract_conduit.py    # 33 engine tests
+python3 test_sim_machine.py            # 3 simulator/driver tests
 ```
 
 ## Layout
@@ -44,5 +58,8 @@ python3 bim/test_extract_conduit.py                  # 33 tests
 | `bim/qa.py` | per-run data-health report |
 | `bim/calibration.py` | units → motor-steps + springback scaffold |
 | `bim/process.py` | one command that produces every output |
+| `machine/commands.py` | ClearCore command interface (protocol vocabulary) |
+| `machine/sim_machine.py` | software model of the firmware (drives with no hardware) |
+| `run_stick_job.py` / `demo.py` | drive a run / the whole arc through the simulator |
 
-Built with `ifcopenshell` + `numpy`.
+Built with `ifcopenshell` + `numpy` (no other runtime deps).

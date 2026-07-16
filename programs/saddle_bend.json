@@ -1,0 +1,10 @@
+{
+  "name": "Three-point saddle",
+  "description": "A 45-degree three-point saddle: a center bend with a half-angle bend either side, used to jump the conduit over a crossing pipe or other round obstacle.",
+  "units": "uncalibrated machine units - firmware treats values as raw steps until calibration",
+  "bends": [
+    { "advance": 300, "rotate": 0,   "angle": 22.5 },
+    { "advance": 80,  "rotate": 180, "angle": 45 },
+    { "advance": 80,  "rotate": 180, "angle": 22.5 }
+  ]
+}
