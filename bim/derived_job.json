@@ -1,0 +1,19 @@
+{
+  "name": "Derived from conduit_dtv.ifc (run 1 of 1)",
+  "description": "Auto-derived from IFC conduit centerline. First pass, uncalibrated, not hardware-reviewed.",
+  "units": "millimetres of centerline / degrees of turn - NOT yet converted to motor steps",
+  "conduit": "Rigid Nonmetallic Conduit (RNC Sch 40)",
+  "outer_diameter_mm": 60.3,
+  "bends": [
+    {
+      "advance": 29260.8,
+      "rotate": 0.0,
+      "angle": 90.0
+    },
+    {
+      "advance": 10972.8,
+      "rotate": 180.0,
+      "angle": 90.0
+    }
+  ]
+}

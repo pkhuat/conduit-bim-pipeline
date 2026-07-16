@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+bim/out/
+.DS_Store

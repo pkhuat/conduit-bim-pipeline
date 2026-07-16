@@ -1,0 +1,64 @@
+{
+  "name": "sample_elec.ifc \u2014 most complex conduit run",
+  "description": "Auto-derived from a real Revit export via IFC + port-based grouping + trade-angle/roll cleanup. Uncalibrated.",
+  "units": "millimetres of centerline / degrees of turn - NOT motor steps",
+  "conduit": "Electrical Metallic Tubing (EMT)",
+  "outer_diameter_mm": 55.8,
+  "bends": [
+    {
+      "advance": 1219.2,
+      "rotate": 0.0,
+      "angle": 90.0
+    },
+    {
+      "advance": 2215.8,
+      "rotate": 90.0,
+      "angle": 60.0
+    },
+    {
+      "advance": 832.5,
+      "rotate": 0.0,
+      "angle": 30.0
+    },
+    {
+      "advance": 4111.6,
+      "rotate": 180.0,
+      "angle": 45.0
+    },
+    {
+      "advance": 922.8,
+      "rotate": 0.0,
+      "angle": 45.0
+    },
+    {
+      "advance": 11053.7,
+      "rotate": 90.0,
+      "angle": 30.0
+    },
+    {
+      "advance": 1209.8,
+      "rotate": 180.0,
+      "angle": 30.0
+    },
+    {
+      "advance": 7642.8,
+      "rotate": 90.0,
+      "angle": 45.0
+    },
+    {
+      "advance": 1045.4,
+      "rotate": 0.0,
+      "angle": 45.0
+    },
+    {
+      "advance": 1168.4,
+      "rotate": 0.0,
+      "angle": 30.0
+    },
+    {
+      "advance": 832.8,
+      "rotate": 90.0,
+      "angle": 90.0
+    }
+  ]
+}
