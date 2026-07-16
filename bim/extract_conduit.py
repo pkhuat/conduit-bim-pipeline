@@ -739,23 +739,30 @@ def split_into_pieces(bends, tail, stick_mm=STICK_MM, clearance_mm=COUPLER_CLEAR
     return pieces, warnings
 
 
-def pack_sticks(lengths, stick_mm=STICK_MM):
-    """First-Fit-Decreasing bin-packing of piece cut-lengths into raw `stick_mm`
-    sticks. Each piece is cut from stock; short (partial) pieces nest into the
-    offcut of a longer one, so this is how many raw 10-ft sticks you actually buy
-    vs. one-per-piece. Pack per conduit SIZE (different stock can't share).
-    Returns a list of sticks, each a list of the cut-lengths taken from it."""
-    caps, packs = [], []                         # remaining capacity / contents per stick
-    for L in sorted((min(x, stick_mm) for x in lengths), reverse=True):
+def pack_labeled(items, stick_mm=STICK_MM):
+    """First-Fit-Decreasing bin-packing of (label, length_mm) items into raw
+    `stick_mm` sticks. Short (partial) pieces nest into the offcut of a longer
+    one. Pack per conduit SIZE (different stock can't share). Returns a list of
+    sticks, each a list of the (label, length) pieces cut from it (longest first)."""
+    caps, sticks = [], []                        # remaining capacity / contents per stick
+    for label, L in sorted(items, key=lambda t: t[1], reverse=True):
+        L = min(L, stick_mm)
         for j in range(len(caps)):
             if caps[j] + 1e-6 >= L:
                 caps[j] -= L
-                packs[j].append(L)
+                sticks[j].append((label, L))
                 break
         else:
             caps.append(stick_mm - L)
-            packs.append([L])
-    return packs
+            sticks.append([(label, L)])
+    return sticks
+
+
+def pack_sticks(lengths, stick_mm=STICK_MM):
+    """How many raw sticks the cut-lengths need (offcut-optimized); see
+    pack_labeled. Returns a list of sticks, each a list of cut-lengths."""
+    packed = pack_labeled(list(enumerate(lengths)), stick_mm)
+    return [[L for _, L in stick] for stick in packed]
 
 
 # Trade operations are named multi-bend moves an electrician thinks in. Roll here

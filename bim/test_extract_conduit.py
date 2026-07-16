@@ -446,6 +446,15 @@ def test_roll_direction_is_signed():
     assert br.roll_label(90.0, 1) == "roll 90 CW" and br.roll_label(90.0, -1) == "roll 90 CCW"
 
 
+def test_pack_labeled_cut_plan():
+    # three pieces from 3048 mm stock: 3000 fills one; 2000 + 1000 nest into another
+    sticks = ec.pack_labeled([("1.1", 3000.0), ("2.1", 2000.0), ("2.2", 1000.0)],
+                             stick_mm=3048.0)
+    assert len(sticks) == 2                              # offcut nesting -> 2 not 3
+    assert all(sum(L for _, L in s) <= 3048.0 + 1 for s in sticks)   # within a stick
+    assert sorted(lab for s in sticks for lab, _ in s) == ["1.1", "2.1", "2.2"]  # each once
+
+
 def test_job_totals_bill_of_materials():
     def B(ang, rot, adv=600.0):
         return {"angle": ang, "rotate": rot, "advance": adv, "roll_dir": 0}

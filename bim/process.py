@@ -90,6 +90,8 @@ def process_one(path):
     br.write_csvs(rows, runs_csv, bends_csv)
     pieces_csv = os.path.join(OUTDIR, f"{stem}_pieces.csv")
     br.write_pieces_csv(rows, pieces_csv)
+    cutlist_csv = os.path.join(OUTDIR, f"{stem}_cutlist.csv")
+    br.write_cutlist_csv(rows, cutlist_csv)
 
     # 2) diagrams + printable per-stick bend cards
     fname, druns = bd.cleaned_runs(path, 12)
@@ -151,6 +153,7 @@ def process_one(path):
     print(f"    {rel(runs_csv)}       (one row per conduit)")
     print(f"    {rel(bends_csv)}      (one row per bend)")
     print(f"    {rel(pieces_csv)}     (one row per 10-ft stick + its bend instructions)")
+    print(f"    {rel(cutlist_csv)}    (offcut-optimized cut plan: pieces per raw stick)")
     print(f"    {rel(html_path)}  (open in a browser)")
     print(f"    {rel(cards_path)}     (printable per-stick bend cards)")
     print(f"    {rel(health_path)}      (data-health: runs to review)")
@@ -207,6 +210,7 @@ def write_index(outdir):
                             link("_runs.csv", "runs.csv"),
                             link("_bends.csv", "bends.csv"),
                             link("_pieces.csv", "pieces.csv"),
+                            link("_cutlist.csv", "cutlist.csv"),
                             link("_job.json", "job.json")])
         n_couplers = max(max(n_sticks, 0) - n_cond, 0)   # k sticks per run -> k-1 couplers
         review = ("—" if n_review is None

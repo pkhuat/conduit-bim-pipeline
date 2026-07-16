@@ -307,6 +307,32 @@ def write_pieces_csv(rows, pieces_csv=None):
     return pieces_csv
 
 
+def write_cutlist_csv(rows, cutlist_csv=None):
+    """The offcut-optimized CUT PLAN: one row per raw 10-ft stick to buy, listing
+    which pieces to cut from it (as run.piece @ length) and the offcut left over.
+    Grouped by conduit size — this is how a shop cuts stock with least waste."""
+    cutlist_csv = cutlist_csv or os.path.join(HERE, "conduit_cutlist.csv")
+    by_size = {}
+    for r in rows:
+        size = ec.trade_size_for_od(r["od_mm"])
+        label = f'{r["kind"]} {size}"' if size else r["kind"]
+        for i, p in enumerate(r.get("pieces") or [], 1):
+            length = p.get("developed_mm", p.get("length_mm", 0.0))
+            by_size.setdefault(label, []).append((f'{r["run"]}.{i}', length))
+    with open(cutlist_csv, "w", newline="") as fh:
+        w = csv.writer(fh)
+        w.writerow(["conduit", "raw_stick", "num_pieces", "pieces (run.piece @ length)",
+                    "offcut_ft"])
+        for label in sorted(by_size):
+            sticks = ec.pack_labeled(by_size[label])
+            for n, stick in enumerate(sticks, 1):
+                used = sum(L for _, L in stick)
+                cuts = "; ".join(f"{lab} @ {fmt_ftin(L)}" for lab, L in stick)
+                w.writerow([label, n, len(stick), cuts,
+                            round((ec.STICK_MM - used) / MM_PER_FT, 2)])
+    return cutlist_csv
+
+
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT
     info, rows = run_rows(path)
