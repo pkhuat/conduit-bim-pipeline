@@ -603,12 +603,17 @@ def derive_bends(verts):
     return bends, lengths, tail
 
 
-def snap_to_trade(angle, tol=SNAP_TOL_DEG, rel_tol=SNAP_REL_TOL):
+def snap_to_trade(angle, tol=SNAP_TOL_DEG, rel_tol=SNAP_REL_TOL, force=False):
     """Round a derived angle to the nearest standard trade angle when the change is
     small both in absolute terms (`tol`) AND relative to the angle (`rel_tol`);
     otherwise leave it as-is (a genuinely non-standard bend, reported honestly).
-    The relative guard stops a gentle bend like 6° from being forced to 10°."""
+    The relative guard stops a gentle bend like 6° from being forced to 10°.
+
+    `force=True` snaps to the nearest trade angle unconditionally — used to *resolve*
+    flagged odd-angle runs when someone opts to standardize them."""
     nearest = min(TRADE_ANGLES, key=lambda t: abs(t - angle))
+    if force:
+        return nearest
     delta = abs(nearest - angle)
     return nearest if (delta <= tol and delta <= rel_tol * angle) else angle
 

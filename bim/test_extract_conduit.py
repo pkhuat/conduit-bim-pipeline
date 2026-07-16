@@ -176,6 +176,10 @@ def test_snap_to_trade_angles():
     assert ec.snap_to_trade(6.0) == 6.0        # 4° move is 2/3 of a 6° bend -> keep
     assert ec.snap_to_trade(14.0) == 14.0      # 4° move is too big relative to 14°
     assert ec.snap_to_trade(9.5) == 10.0       # 0.5° move near the floor still snaps
+    # force=True (the "resolve odd angles" action) snaps to nearest trade unconditionally
+    assert ec.snap_to_trade(6.0, force=True) == 10.0
+    assert ec.snap_to_trade(82.6, force=True) == 90.0
+    assert ec.snap_to_trade(52.0, force=True) == 45.0
 
 
 def test_drop_near_straight_removes_tiny_kink():
@@ -378,6 +382,25 @@ def test_calibration_converters_and_springback():
     assert cal.deg_to_steps(90, "bend") == 90 * cal.CALIBRATION["bend_steps_per_deg"]
     assert cal.deg_to_steps(45, "rotate") == 45 * cal.CALIBRATION["rotate_steps_per_deg"]
     assert cal.springback(45) == 45.0                     # zero model = identity for now
+
+
+def test_calibration_apply_to_job_gated():
+    import calibration as cal
+    mk = lambda: {"pieces": [{"bends": [{"advance": 100.0, "angle": 90.0,
+                                         "rotate": 0.0, "roll_dir": 0}]}]}
+    # uncalibrated: no-op, no step fields added
+    out = cal.apply_to_job(mk())
+    assert "advance_steps" not in out["pieces"][0]["bends"][0]
+    # calibrated: bends get motor-step / over-bend values
+    cal.CALIBRATED = True
+    try:
+        out2 = cal.apply_to_job(mk())
+        b = out2["pieces"][0]["bends"][0]
+        assert b["advance_steps"] == round(cal.mm_to_steps(100.0))
+        assert b["bend_steps"] == round(cal.deg_to_steps(cal.springback(90.0), "bend"))
+        assert out2["calibrated"] is True
+    finally:
+        cal.CALIBRATED = False                            # restore for other tests
 
 
 def test_roundtrip_reconstruct_rebuilds_a_run():

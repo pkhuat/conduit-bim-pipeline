@@ -41,3 +41,20 @@ def deg_to_steps(deg, axis="bend"):
 def springback(target_deg):
     """Target bend angle -> the (over-)bend angle to actually command."""
     return target_deg * (1.0 + SPRINGBACK["factor"]) + SPRINGBACK["offset_deg"]
+
+
+def apply_to_job(job):
+    """Annotate a job dict's bends with motor-step / over-bend values alongside the
+    mm/deg — a NO-OP until CALIBRATED (so the plumbing ships now, numbers drop in
+    later). Handles a single run ({'pieces': ...}) or all runs ({'runs': [...]})."""
+    if not CALIBRATED:
+        return job
+    for run in job.get("runs", [job]):
+        for piece in run.get("pieces", []):
+            for b in piece.get("bends", []):
+                signed_roll = b.get("rotate", 0.0) * (b.get("roll_dir", 0) or 1)
+                b["advance_steps"] = round(mm_to_steps(b.get("advance", 0.0)))
+                b["bend_steps"] = round(deg_to_steps(springback(b.get("angle", 0.0)), "bend"))
+                b["rotate_steps"] = round(deg_to_steps(signed_roll, "rotate"))
+    job["calibrated"] = True
+    return job

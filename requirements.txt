@@ -1,2 +1,3 @@
 numpy
 ifcopenshell
+flask         # web front door (webapp/app.py) — optional, not needed by the engine

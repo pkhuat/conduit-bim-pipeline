@@ -29,6 +29,22 @@ Or the smaller hand-built check case:
 python3 bim/process.py bim/samples/conduit_dtv.ifc
 ```
 
+## Web app — drag & drop
+A browser front door: drop an IFC, get the whole package (cards, cut list, BOM,
+data-health, machine job) on a results page, downloadable as a zip. It can also
+**standardize flagged odd angles** in one click.
+```bash
+pip install flask
+python3 webapp/app.py            # → http://127.0.0.1:5000
+```
+
+## Machine handoff
+The pipeline stops at a validated, machine-ready **`job.json`** (feeds in mm, angles
+in degrees, take-up corrected) plus the ClearCore command protocol in
+`machine/commands.py`. That's the seam to the Pi/firmware — see
+[docs/MACHINE_INTERFACE.md](docs/MACHINE_INTERFACE.md) for the schema, the command
+vocabulary, and how calibration/springback plug in.
+
 ## Drive the (simulated) machine
 The machine job runs end to end through a software model of the firmware — no
 hardware, nothing moves:

@@ -37,8 +37,9 @@ def short_kind(name):
     return m.group(1) if m else name
 
 
-def run_rows(path):
-    """Return (header_info, [per-run dicts]) for an IFC file."""
+def run_rows(path, resolve_odd=False):
+    """Return (header_info, [per-run dicts]) for an IFC file. With resolve_odd=True,
+    every bend is snapped to the nearest trade angle (standardize the odd ones)."""
     model = ifcopenshell.open(path)
     scale = ifcopenshell.util.unit.calculate_unit_scale(model) * 1000.0
     segs = ec.occurrences_of(model, "IfcCableCarrierSegment", "IfcCableCarrierSegmentType")
@@ -50,7 +51,7 @@ def run_rows(path):
         clean = ec.drop_near_straight(ec.simplify_polyline(poly, ec.SIMPLIFY_TOL), ec.MIN_BEND_DEG)
         bends, lengths, tail = ec.derive_bends(clean)
         for b in bends:
-            b["angle"] = round(ec.snap_to_trade(b["angle"]), 1)
+            b["angle"] = round(ec.snap_to_trade(b["angle"], force=resolve_odd), 1)
             b["rotate"] = round(ec.snap_roll(b["rotate"]), 1)
         seg = run_segs[0] if run_segs else None
         od = ec.outer_diameter(seg) if seg else None

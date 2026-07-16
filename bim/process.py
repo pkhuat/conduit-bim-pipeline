@@ -72,12 +72,12 @@ def run_pieces(r):
     return out
 
 
-def process_one(path):
+def process_one(path, resolve_odd=False):
     stem = os.path.splitext(os.path.basename(path))[0]
     os.makedirs(OUTDIR, exist_ok=True)
 
-    # 1) schedule + CSVs
-    info, rows = br.run_rows(path)
+    # 1) schedule + CSVs  (resolve_odd standardizes flagged odd-angle runs)
+    info, rows = br.run_rows(path, resolve_odd=resolve_odd)
     if not rows:
         print(f"  {os.path.basename(path)}: no conduit runs found "
               f"(no IfcCableCarrierSegment centerlines) — nothing to fabricate. "
@@ -124,7 +124,7 @@ def process_one(path):
             "pieces": pieces,
         }
         job_path = os.path.join(OUTDIR, f"{stem}_job.json")
-        json.dump(job, open(job_path, "w"), indent=2)
+        json.dump(cal.apply_to_job(job), open(job_path, "w"), indent=2)
 
         # whole-building machine data: every bent run's per-stick pieces
         all_jobs = {
@@ -134,7 +134,8 @@ def process_one(path):
                       "die": br.ec.die_label(rr["kind"], rr["od_mm"]),
                       "pieces": run_pieces(rr)} for rr in bent],
         }
-        json.dump(all_jobs, open(os.path.join(OUTDIR, f"{stem}_all_jobs.json"), "w"), indent=2)
+        json.dump(cal.apply_to_job(all_jobs),
+                  open(os.path.join(OUTDIR, f"{stem}_all_jobs.json"), "w"), indent=2)
 
     # 4) data-health / QA — round-trip validate the recipe and flag runs to review
     _, devs = V.run_deviations(path)
