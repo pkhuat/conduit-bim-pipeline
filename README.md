@@ -29,14 +29,24 @@ Or the smaller hand-built check case:
 python3 bim/process.py bim/samples/conduit_dtv.ifc
 ```
 
-## Web app — drag & drop
-A browser front door: drop an IFC, get the whole package (cards, cut list, BOM,
-data-health, machine job) on a results page, downloadable as a zip. It can also
-**standardize flagged odd angles** in one click.
+## Web app (Next.js + API)
+A modern front end — **Next.js / React / TypeScript** (`web/`) — talking to the
+pipeline exposed as a JSON API (`webapp/app.py`). Drop an IFC → a dashboard with the
+whole package (cards, cut list, BOM, data-health, machine job) → download the zip.
+One click **standardizes flagged odd angles**.
+
+Run it (two terminals):
 ```bash
+# 1) the pipeline API
 pip install flask
-python3 webapp/app.py            # → http://127.0.0.1:5000
+python3 webapp/app.py                    # → http://127.0.0.1:5000
+
+# 2) the Next.js front end
+cd web && npm install && npm run dev      # → http://localhost:3000
 ```
+
+**Deploy:** `web/` → Vercel; the Python API → Render / Fly / Railway. Point the front
+end at the API with `NEXT_PUBLIC_API_URL` (see `web/.env.local.example`).
 
 ## Machine handoff
 The pipeline stops at a validated, machine-ready **`job.json`** (feeds in mm, angles

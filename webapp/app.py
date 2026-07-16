@@ -233,6 +233,63 @@ def download(stem):
                      download_name=f"{stem}_fabrication_package.zip")
 
 
+# ── JSON API (for the Next.js front-end) ───────────────────────────────────────
+
+@app.after_request
+def _cors(resp):
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return resp
+
+
+def _job_payload(stem):
+    urls = {k: f"/out/{stem}_{v}" for k, v in {
+        "cards": "cards.html", "diagrams": "diagrams.html", "cutlist": "cutlist.csv",
+        "pieces": "pieces.csv", "health": "health.txt", "job": "job.json"}.items()}
+    urls["download"] = f"/download/{stem}"
+    return {"ok": True, "stem": stem, "stats": read_stats(stem), "urls": urls}
+
+
+@app.route("/api/process", methods=["POST", "OPTIONS"])
+def api_process():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    f = request.files.get("ifc")
+    if not f or not f.filename:
+        return {"ok": False, "error": "No file selected."}, 400
+    if not f.filename.lower().endswith(".ifc"):
+        return {"ok": False, "error": "That doesn't look like an IFC file (need a .ifc)."}, 400
+    os.makedirs(UPLOADS, exist_ok=True)
+    stem = _stem(f.filename)
+    path = os.path.join(UPLOADS, f"{stem}.ifc")
+    f.save(path)
+    resolve = request.form.get("resolve") in ("on", "true", "1")
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            process.process_one(path, resolve_odd=resolve)
+    except Exception as e:
+        return {"ok": False, "error": f"Couldn't process that file — {type(e).__name__}: {e}"}, 422
+    if not os.path.exists(os.path.join(OUT, f"{stem}_pieces.csv")):
+        return {"ok": False, "error": f"No conduit runs found in {f.filename}. "
+                "Is this an electrical model? (HVAC / plumbing / structural have no conduit.)"}, 200
+    return _job_payload(stem)
+
+
+@app.route("/api/resolve/<stem>", methods=["POST", "OPTIONS"])
+def api_resolve(stem):
+    if request.method == "OPTIONS":
+        return ("", 204)
+    path = os.path.join(UPLOADS, f"{stem}.ifc")
+    if not os.path.exists(path):
+        return {"ok": False, "error": "Original upload not found — please upload again."}, 404
+    with contextlib.redirect_stdout(io.StringIO()):
+        process.process_one(path, resolve_odd=True)
+    payload = _job_payload(stem)
+    payload["resolved"] = True
+    return payload
+
+
 if __name__ == "__main__":
-    print("Conduit pipeline web app → http://127.0.0.1:5000")
+    print("Conduit pipeline API → http://127.0.0.1:5000  (Next.js front-end in web/)")
     app.run(debug=False, port=5000)
