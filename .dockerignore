@@ -1,0 +1,10 @@
+# API build context (repo root). Keep it lean — the API only needs bim/ + webapp/.
+.git
+**/__pycache__
+**/*.pyc
+web
+bim/out
+webapp/uploads
+*.md
+.github
+Tubender-knowledge

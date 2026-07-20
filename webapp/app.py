@@ -6,38 +6,94 @@ data-health report, and a machine job — rendered on a results page and
 downloadable as a zip. Wraps the same `bim/process.py` the CLI runs.
 
     pip install flask
-    python3 webapp/app.py        # then open http://127.0.0.1:5000
+    python3 webapp/app.py        # then open http://127.0.0.1:5050
 
 Simulation/office tool only; produces the machine-ready job, does not drive hardware.
 """
 
 import csv
 import io
+import logging
 import os
 import re
 import sys
+import time
+import uuid
 import zipfile
 import contextlib
 
 from flask import (Flask, request, redirect, url_for, send_file,
-                   send_from_directory, render_template_string, abort)
+                   send_from_directory, abort)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 BIM = os.path.join(ROOT, "bim")
-OUT = os.path.join(BIM, "out")
-UPLOADS = os.path.join(HERE, "uploads")
+# CONDUIT_OUT_DIR is shared with the pipeline (process.py) so both read/write the
+# same place — set it to a writable volume in production.
+OUT = os.environ.get("CONDUIT_OUT_DIR") or os.path.join(BIM, "out")
+UPLOADS = os.environ.get("CONDUIT_UPLOAD_DIR") or os.path.join(HERE, "uploads")
 sys.path.insert(0, BIM)
 import process  # noqa: E402  (the pipeline)
 
+# --- configuration (env-overridable for production) ---------------------------
+PORT = int(os.environ.get("PORT", "5050"))
+MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "250"))
+# comma-separated allowed CORS origins; "*" (default) allows any — set to the
+# front-end's URL in production, e.g. ALLOWED_ORIGINS=https://app.example.com
+ALLOWED_ORIGINS = [o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()]
+
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"),
+                    format="%(asctime)s %(levelname)s %(name)s %(message)s")
+log = logging.getLogger("conduit.api")
+
 app = Flask(__name__)
-app.config["MAX_CONTENT_LENGTH"] = 250 * 1024 * 1024   # accept up to 250 MB models
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+
+_STEM_RE = re.compile(r"[A-Za-z0-9_.-]+")
 
 
 def _stem(filename):
-    """A safe output stem from an uploaded filename."""
+    """A safe base stem from an uploaded filename (no job id yet)."""
     base = os.path.splitext(os.path.basename(filename))[0]
     return re.sub(r"[^A-Za-z0-9_.-]", "_", base) or "upload"
+
+
+def _new_job_stem(filename):
+    """A unique per-upload stem, so concurrent or same-named uploads never collide
+    or overwrite one another in the shared output directory."""
+    return f"{_stem(filename)}-{uuid.uuid4().hex[:8]}"
+
+
+def _valid_stem(stem):
+    """Guard stems taken from the URL against path tricks / unknown jobs."""
+    return bool(stem) and re.fullmatch(_STEM_RE, stem) is not None
+
+
+def _display_name(stem):
+    """The human name for a job stem (drops the -<8hex> job-id suffix)."""
+    return re.sub(r"-[0-9a-f]{8}$", "", stem)
+
+
+JOB_TTL_HOURS = int(os.environ.get("JOB_TTL_HOURS", "24"))
+
+
+def _cleanup_old_jobs():
+    """Best-effort: delete job artifacts older than JOB_TTL_HOURS so the shared
+    output/upload dirs don't grow without bound in a long-running service. The
+    shared landing page and aggregate index are preserved."""
+    if JOB_TTL_HOURS <= 0:
+        return
+    cutoff = time.time() - JOB_TTL_HOURS * 3600
+    for d in (OUT, UPLOADS):
+        try:
+            for fn in os.listdir(d):
+                if fn in ("index.html", "all_jobs.json"):
+                    continue
+                p = os.path.join(d, fn)
+                if os.path.isfile(p) and os.path.getmtime(p) < cutoff:
+                    os.remove(p)
+        except OSError:
+            pass
 
 
 def read_stats(stem):
@@ -130,6 +186,20 @@ UPLOAD_SCRIPT = """<script>
 </script>"""
 
 
+@app.route("/health")
+def health():
+    """Liveness/readiness probe for load balancers and container orchestration."""
+    return {"ok": True, "service": "conduit-pipeline-api"}
+
+
+@app.errorhandler(413)
+def _too_large(_e):
+    msg = f"File too large — the limit is {MAX_UPLOAD_MB} MB."
+    if request.path.startswith("/api/"):
+        return {"ok": False, "error": msg}, 413
+    return _error(msg), 413
+
+
 @app.route("/")
 def home():
     return PAGE.format(title="Conduit Pipeline",
@@ -150,17 +220,20 @@ def process_upload():
     if not f.filename.lower().endswith(".ifc"):
         return _error("That doesn't look like an IFC file (need a <b>.ifc</b>).")
     os.makedirs(UPLOADS, exist_ok=True)
-    stem = _stem(f.filename)
+    _cleanup_old_jobs()
+    stem = _new_job_stem(f.filename)
     path = os.path.join(UPLOADS, f"{stem}.ifc")
     f.save(path)
     resolve = request.form.get("resolve") == "on"
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            process.process_one(path, resolve_odd=resolve)
+            status = process.process_one(path, resolve_odd=resolve)
     except Exception as e:                       # malformed / unreadable IFC, etc.
+        log.exception("process failed for %s", f.filename)
         return _error(f"Couldn't process that file &mdash; {type(e).__name__}: {e}")
     if not os.path.exists(os.path.join(OUT, f"{stem}_pieces.csv")):
-        return _error(f"No conduit runs found in <b>{f.filename}</b>. "
+        reason = status.get("reason") if isinstance(status, dict) else None
+        return _error(reason or f"No conduit runs found in <b>{f.filename}</b>. "
                       "Is this an electrical model? (HVAC/plumbing/structural have no conduit.)")
     return redirect(url_for("result", stem=stem, resolved=int(resolve)))
 
@@ -168,6 +241,8 @@ def process_upload():
 @app.route("/resolve/<stem>")
 def resolve(stem):
     """Re-process the stored upload with odd angles standardized."""
+    if not _valid_stem(stem):
+        abort(404)
     path = os.path.join(UPLOADS, f"{stem}.ifc")
     if not os.path.exists(path):
         return _error("Original upload not found — please upload again.")
@@ -178,7 +253,10 @@ def resolve(stem):
 
 @app.route("/result/<stem>")
 def result(stem):
+    if not _valid_stem(stem):
+        abort(404)
     s = read_stats(stem)
+    name = _display_name(stem)
     resolved = request.args.get("resolved") == "1"
     tiles = "".join(f'<div class="tile"><div class="n">{v}</div><div class="l">{l}</div></div>'
                     for v, l in [(s["conduits"], "conduit runs"), (s["bends"], "bends"),
@@ -207,13 +285,13 @@ def result(stem):
         card(f"/out/{stem}_health.txt", "Data health", "runs to review"),
         card(f"/out/{stem}_job.json", "Machine job", "the hardest run, machine-ready"),
     ])
-    body = (f'<h1>{stem}</h1><div class="sub">{s["conduit"]} &middot; fabrication package</div>'
+    body = (f'<h1>{name}</h1><div class="sub">{s["conduit"]} &middot; fabrication package</div>'
             f'{banner}<div class="tiles">{tiles}</div>'
             f'<div class="cards">{cards}</div>'
             f'<div class="row" style="margin-top:22px">'
             f'<a class="btn" href="/download/{stem}">&#8681; Download package (.zip)</a>'
             f'<a class="btn g" href="/">Process another</a></div>')
-    return PAGE.format(title=f"{stem} — package", body=body, script="")
+    return PAGE.format(title=f"{name} — package", body=body, script="")
 
 
 @app.route("/out/<path:fn>")
@@ -223,21 +301,28 @@ def out_file(fn):
 
 @app.route("/download/<stem>")
 def download(stem):
+    if not _valid_stem(stem):
+        abort(404)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
-        for name in os.listdir(OUT):
-            if name.startswith(f"{stem}_"):
-                z.write(os.path.join(OUT, name), name)
+        for fn in os.listdir(OUT):
+            if fn.startswith(f"{stem}_"):
+                z.write(os.path.join(OUT, fn), fn)
     buf.seek(0)
     return send_file(buf, mimetype="application/zip", as_attachment=True,
-                     download_name=f"{stem}_fabrication_package.zip")
+                     download_name=f"{_display_name(stem)}_fabrication_package.zip")
 
 
 # ── JSON API (for the Next.js front-end) ───────────────────────────────────────
 
 @app.after_request
 def _cors(resp):
-    resp.headers["Access-Control-Allow-Origin"] = "*"
+    origin = request.headers.get("Origin")
+    if "*" in ALLOWED_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+    elif origin and origin in ALLOWED_ORIGINS:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Vary"] = "Origin"
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
     return resp
@@ -248,7 +333,8 @@ def _job_payload(stem):
         "cards": "cards.html", "diagrams": "diagrams.html", "cutlist": "cutlist.csv",
         "pieces": "pieces.csv", "health": "health.txt", "job": "job.json"}.items()}
     urls["download"] = f"/download/{stem}"
-    return {"ok": True, "stem": stem, "stats": read_stats(stem), "urls": urls}
+    return {"ok": True, "stem": stem, "name": _display_name(stem),
+            "stats": read_stats(stem), "urls": urls}
 
 
 @app.route("/api/process", methods=["POST", "OPTIONS"])
@@ -261,18 +347,22 @@ def api_process():
     if not f.filename.lower().endswith(".ifc"):
         return {"ok": False, "error": "That doesn't look like an IFC file (need a .ifc)."}, 400
     os.makedirs(UPLOADS, exist_ok=True)
-    stem = _stem(f.filename)
+    _cleanup_old_jobs()
+    stem = _new_job_stem(f.filename)
     path = os.path.join(UPLOADS, f"{stem}.ifc")
     f.save(path)
     resolve = request.form.get("resolve") in ("on", "true", "1")
     try:
         with contextlib.redirect_stdout(io.StringIO()):
-            process.process_one(path, resolve_odd=resolve)
+            status = process.process_one(path, resolve_odd=resolve)
     except Exception as e:
+        log.exception("api process failed for %s", f.filename)
         return {"ok": False, "error": f"Couldn't process that file — {type(e).__name__}: {e}"}, 422
     if not os.path.exists(os.path.join(OUT, f"{stem}_pieces.csv")):
-        return {"ok": False, "error": f"No conduit runs found in {f.filename}. "
-                "Is this an electrical model? (HVAC / plumbing / structural have no conduit.)"}, 200
+        reason = status.get("reason") if isinstance(status, dict) else None
+        return {"ok": False, "error": reason or
+                f"No conduit runs found in {f.filename}. Is this an electrical model? "
+                "(HVAC / plumbing / structural have no conduit.)"}, 200
     return _job_payload(stem)
 
 
@@ -280,16 +370,24 @@ def api_process():
 def api_resolve(stem):
     if request.method == "OPTIONS":
         return ("", 204)
+    if not _valid_stem(stem):
+        return {"ok": False, "error": "Bad job id."}, 404
     path = os.path.join(UPLOADS, f"{stem}.ifc")
     if not os.path.exists(path):
         return {"ok": False, "error": "Original upload not found — please upload again."}, 404
-    with contextlib.redirect_stdout(io.StringIO()):
-        process.process_one(path, resolve_odd=True)
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            process.process_one(path, resolve_odd=True)
+    except Exception as e:
+        log.exception("api resolve failed for %s", stem)
+        return {"ok": False, "error": f"Couldn't re-process — {type(e).__name__}: {e}"}, 422
     payload = _job_payload(stem)
     payload["resolved"] = True
     return payload
 
 
 if __name__ == "__main__":
-    print("Conduit pipeline API → http://127.0.0.1:5000  (Next.js front-end in web/)")
-    app.run(debug=False, port=5000)
+    # Dev only. In production run under gunicorn (see README / Dockerfile.api):
+    #   gunicorn -w 2 -t 120 -b 0.0.0.0:$PORT webapp.app:app
+    print(f"Conduit pipeline API (dev server) → http://127.0.0.1:{PORT}")
+    app.run(debug=False, host="127.0.0.1", port=PORT)

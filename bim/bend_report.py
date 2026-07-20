@@ -30,11 +30,18 @@ MM_PER_FT = 304.8
 
 
 def short_kind(name):
-    """'Electrical Metallic Tubing (EMT)' -> 'EMT'; else a trimmed name."""
+    """'Electrical Metallic Tubing (EMT)' -> 'EMT'; else a short, sane label.
+    Real Revit conduit names carry the trade abbreviation in parentheses; without
+    one, fall back to a trimmed Latin label — or generic 'conduit' — so a raw or
+    non-Latin element name never leaks through as the conduit 'kind'."""
     if not name:
         return "?"
     m = re.search(r"\(([^)]+)\)", name)
-    return m.group(1) if m else name
+    if m:
+        return m.group(1)
+    if not re.search(r"[A-Za-z]", name):     # no Latin letters (e.g. Cyrillic) -> generic
+        return "conduit"
+    return name[:24].strip()
 
 
 def run_rows(path, resolve_odd=False):
@@ -42,9 +49,8 @@ def run_rows(path, resolve_odd=False):
     every bend is snapped to the nearest trade angle (standardize the odd ones)."""
     model = ifcopenshell.open(path)
     scale = ifcopenshell.util.unit.calculate_unit_scale(model) * 1000.0
-    segs = ec.occurrences_of(model, "IfcCableCarrierSegment", "IfcCableCarrierSegmentType")
-    fits = ec.occurrences_of(model, "IfcCableCarrierFitting", "IfcCableCarrierFittingType")
-    runs = ec.port_based_runs(model, segs, fits, scale=scale, return_segments=True)
+    segs, fits, n_trays = ec.conduit_elements(model)
+    runs = ec.reconstruct_runs(model, segs, fits, scale=scale)
 
     rows = []
     for i, (poly, run_segs) in enumerate(runs, 1):
@@ -71,6 +77,8 @@ def run_rows(path, resolve_odd=False):
     info = {
         "file": os.path.basename(path),
         "schema": model.schema,
+        "n_segments": len(segs),
+        "n_trays": n_trays,
         "n_runs": len(rows),
         "n_bent": sum(1 for r in rows if r["bends"]),
         "n_bends": sum(len(r["bends"]) for r in rows),

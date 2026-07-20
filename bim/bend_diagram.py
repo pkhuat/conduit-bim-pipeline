@@ -33,9 +33,8 @@ STICK_COLORS = ("#2b6cb0", "#805ad5", "#d69e2e", "#319795", "#dd6b20", "#b83280"
 def cleaned_runs(path, top):
     model = ifcopenshell.open(path)
     scale = ifcopenshell.util.unit.calculate_unit_scale(model) * 1000.0
-    segs = ec.occurrences_of(model, "IfcCableCarrierSegment", "IfcCableCarrierSegmentType")
-    fits = ec.occurrences_of(model, "IfcCableCarrierFitting", "IfcCableCarrierFittingType")
-    runs = ec.port_based_runs(model, segs, fits, scale=scale, return_segments=True)
+    segs, fits, _ = ec.conduit_elements(model)
+    runs = ec.reconstruct_runs(model, segs, fits, scale=scale)
 
     out = []
     for i, (poly, run_segs) in enumerate(runs, 1):

@@ -1,0 +1,25 @@
+# Render Blueprint for the conduit pipeline API (the Python engine behind gunicorn).
+# Pairs with the Next.js front end on Vercel. In the Render dashboard:
+#   New +  ->  Blueprint  ->  point at this repo. Render builds webapp/Dockerfile.
+#
+# Render injects $PORT automatically; the container's gunicorn binds it. After the
+# web app is live on Vercel, set ALLOWED_ORIGINS to that Vercel URL (and redeploy).
+services:
+  - type: web
+    name: conduit-api
+    runtime: docker
+    dockerfilePath: ./webapp/Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: ALLOWED_ORIGINS
+        sync: false                     # set to your https://<app>.vercel.app after deploy
+      - key: MAX_UPLOAD_MB
+        value: "250"
+      - key: JOB_TTL_HOURS
+        value: "24"
+      - key: CONDUIT_OUT_DIR
+        value: /tmp/conduit/out         # ephemeral (jobs are short-lived; users download the zip)
+      - key: CONDUIT_UPLOAD_DIR
+        value: /tmp/conduit/uploads

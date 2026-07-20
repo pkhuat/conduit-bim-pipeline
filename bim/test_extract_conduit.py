@@ -355,6 +355,24 @@ def test_qa_flags_odd_angles_not_clean_runs():
         assert flagged == [], f"clean run should not be flagged, got {flagged}"
 
 
+def test_qa_flags_bent_run_with_unknown_size():
+    """A run that bends but has no readable OD can't be take-up corrected or given a
+    die, so it MUST be flagged (not silently shipped). A straight run with no OD is
+    not a fabrication job, so it must NOT be flagged for size."""
+    import qa
+    unknown_bent = [{"run": 1, "kind": "?", "od_mm": None, "length_mm": 3000.0,
+                     "bends": [{"advance": 500.0, "angle": 90.0, "rotate": 0.0, "roll_dir": 0}],
+                     "tail_mm": 500.0, "pieces": [], "piece_warnings": []}]
+    flagged = qa.flag_rows(unknown_bent, {})
+    assert flagged and any(i.startswith("unknown size") for i in flagged[0]["issues"])
+    n_size, _, _, _ = qa.counts(flagged)
+    assert n_size == 1
+    # straight run, unknown OD -> nothing to bend, so no size flag
+    straight = [{"run": 1, "kind": "?", "od_mm": None, "length_mm": 3000.0,
+                 "bends": [], "tail_mm": 0.0, "pieces": [], "piece_warnings": []}]
+    assert qa.flag_rows(straight, {}) == []
+
+
 def test_pipeline_robust_across_all_sample_ifcs():
     """Every sample IFC (electrical, HVAC, plumbing, test fixtures, the full
     building) must parse without raising, and known ones hit expected counts."""
@@ -373,6 +391,64 @@ def test_pipeline_robust_across_all_sample_ifcs():
         assert counts["conduit_dtv.ifc"] == 1
     if "sample_elec.ifc" in counts:
         assert counts["sample_elec.ifc"] > 100
+
+
+def test_run_rows_falls_back_to_geometry_without_ports():
+    """A real export with no IFC connection ports must still be reconstructed from
+    raw centerline geometry, not silently dropped. The cableCarrier 'abort' file has
+    no usable ports but a single 81-point swept-disk segment that bends 10 times."""
+    path = os.path.join(HERE, "samples", "435--cableCarrier--abort.ifc")
+    if not os.path.exists(path):
+        return
+    import ifcopenshell, ifcopenshell.util.unit as U
+    m = ifcopenshell.open(path)
+    scale = U.calculate_unit_scale(m) * 1000.0
+    segs = ec.occurrences_of(m, "IfcCableCarrierSegment", "IfcCableCarrierSegmentType")
+    fits = ec.occurrences_of(m, "IfcCableCarrierFitting", "IfcCableCarrierFittingType")
+    # ports give nothing here; the shared reconstruction must fall back to geometry
+    assert ec.port_based_runs(m, segs, fits, scale=scale, return_segments=True) == []
+    assert ec.reconstruct_runs(m, segs, fits, scale=scale), "geometry fallback found nothing"
+    _info, rows = br.run_rows(path)
+    assert any(r["bends"] for r in rows), "no bends recovered from a port-less file"
+
+
+def test_cable_trays_excluded_conduit_kept():
+    """Cable trays/ladders/trunking share IfcCableCarrierSegment with conduit but
+    aren't bendable here — they must be excluded (by PredefinedType), while real
+    conduit is kept. project1 is a CABLETRAYSEGMENT file; conduit_dtv is conduit."""
+    import ifcopenshell
+    tray = os.path.join(HERE, "samples", "project1.ifc")
+    if os.path.exists(tray):
+        m = ifcopenshell.open(tray)
+        segs, _fits, n_trays = ec.conduit_elements(m)
+        assert segs == [] and n_trays >= 1, "cable trays should be excluded"
+        _info, rows = br.run_rows(tray)
+        assert rows == [], "a tray-only file should produce no conduit runs"
+    conduit = os.path.join(HERE, "samples", "conduit_dtv.ifc")
+    if os.path.exists(conduit):
+        m = ifcopenshell.open(conduit)
+        segs, _fits, n_trays = ec.conduit_elements(m)
+        assert len(segs) >= 1 and n_trays == 0, "conduit must be kept, not skipped"
+
+
+def test_short_kind_does_not_leak_raw_names():
+    """The 'kind' label uses the trade abbreviation; a raw or non-Latin element name
+    must not leak through (a Cyrillic tray name becomes generic 'conduit')."""
+    assert br.short_kind("Electrical Metallic Tubing (EMT)") == "EMT"
+    assert br.short_kind("Rigid Nonmetallic Conduit (RNC Sch 40)") == "RNC Sch 40"
+    assert br.short_kind("Ступенчатый кабельный лоток") == "conduit"   # no Latin -> generic
+    assert br.short_kind(None) == "?"
+
+
+def test_port_based_file_still_uses_ports_not_fallback():
+    """A file WITH ports must use them, not the weaker geometry grouping: conduit_dtv
+    reconstructs to one bent run via ports, though raw endpoint-grouping alone would
+    see only straight segments. Guards against the fallback overriding good ports."""
+    path = os.path.join(HERE, "samples", "conduit_dtv.ifc")
+    if not os.path.exists(path):
+        return
+    _info, rows = br.run_rows(path)
+    assert len(rows) == 1 and rows[0]["bends"], "port-based reconstruction regressed"
 
 
 def test_calibration_converters_and_springback():

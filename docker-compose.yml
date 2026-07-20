@@ -1,0 +1,43 @@
+# One command to run the whole product in production mode:
+#   docker compose up --build
+# then open http://localhost:3000
+#
+# Override for a real deployment via a .env file next to this one, e.g.:
+#   NEXT_PUBLIC_API_URL=https://api.example.com
+#   ALLOWED_ORIGINS=https://app.example.com
+services:
+  api:
+    build:
+      context: .
+      dockerfile: webapp/Dockerfile
+    environment:
+      PORT: "5050"
+      CONDUIT_OUT_DIR: /data/out
+      CONDUIT_UPLOAD_DIR: /data/uploads
+      MAX_UPLOAD_MB: "${MAX_UPLOAD_MB:-250}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS:-http://localhost:3000}"
+      JOB_TTL_HOURS: "${JOB_TTL_HOURS:-24}"
+    volumes:
+      - conduit-data:/data
+    ports:
+      - "5050:5050"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:5050/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:5050}"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  conduit-data:

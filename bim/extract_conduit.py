@@ -259,6 +259,60 @@ def occurrences_of(model, occ_class, type_class):
     return items
 
 
+# The IfcCableCarrierSegment* family covers round conduit AND flat cable
+# trays/ladders/trunking. This bender only bends round conduit, so trays are
+# detected and excluded rather than silently turned into (bogus) bend jobs.
+CONDUIT_PREDEFINED = {"CONDUITSEGMENT"}
+TRAY_PREDEFINED = {"CABLETRAYSEGMENT", "CABLELADDERSEGMENT", "CABLETRUNKINGSEGMENT"}
+_TRAY_NAME_HINTS = ("tray", "ladder", "trunking", "cablofil", "kabelrinne", "rinne",
+                    "chemin de c", "лоток")  # ...лоток (RU: tray)
+
+
+def carrier_predefined_type(element):
+    """The IfcCableCarrier* PredefinedType, from the occurrence or its defining
+    type (covers IFC4 self-typed and IFC2x3 typed-by-relation), or None."""
+    pt = getattr(element, "PredefinedType", None)
+    if pt:
+        return str(pt)
+    for rel in (getattr(element, "IsTypedBy", None) or []):
+        p = getattr(rel.RelatingType, "PredefinedType", None)
+        if p:
+            return str(p)
+    for rel in (getattr(element, "IsDefinedBy", None) or []):
+        if rel.is_a("IfcRelDefinesByType"):
+            p = getattr(rel.RelatingType, "PredefinedType", None)
+            if p:
+                return str(p)
+    return None
+
+
+def is_conduit_segment(element):
+    """True if a cable-carrier segment is round conduit (what the bender bends), not
+    a cable tray / ladder / trunking. PredefinedType is authoritative; when it's
+    absent or USER/NOTDEFINED, fall back to name keywords, else assume conduit — an
+    unsized round segment is still caught downstream by the 'unknown size' flag."""
+    pt = carrier_predefined_type(element)
+    if pt in CONDUIT_PREDEFINED:
+        return True
+    if pt in TRAY_PREDEFINED:
+        return False
+    t = ifcopenshell.util.element.get_type(element)
+    name = ((getattr(t, "Name", None) or "") + " " + (element.Name or "")).lower()
+    if any(h in name for h in _TRAY_NAME_HINTS):
+        return False
+    return True
+
+
+def conduit_elements(model):
+    """Round-conduit (segments, fittings, n_skipped_carriers) for a model. Cable
+    trays/ladders/trunking are excluded here (not fabricable on a conduit bender),
+    and their count is returned so the caller can say they were seen and skipped."""
+    all_segs = occurrences_of(model, "IfcCableCarrierSegment", "IfcCableCarrierSegmentType")
+    segs = [s for s in all_segs if is_conduit_segment(s)]
+    fits = occurrences_of(model, "IfcCableCarrierFitting", "IfcCableCarrierFittingType")
+    return segs, fits, len(all_segs) - len(segs)
+
+
 def length_unit_label(model):
     """Short label for the file's length unit (mm / m / FOOT / ...). Real exports
     vary — Revit thinks in feet — so never assume; read it from the file."""
@@ -528,6 +582,37 @@ def port_based_runs(model, segments, fittings, scale=1.0, return_segments=False)
     if return_segments:
         return runs
     return [poly for poly, _ in runs]
+
+
+def _run_member_segments(poly, segments, scale, tol=1.0):
+    """Best-effort: which segments' centerlines make up a geometry-grouped run,
+    so the run can inherit an OD / conduit kind. A run built by group_into_runs
+    literally concatenates the segments' own scaled points, so matching on a
+    shared centerline point is near-exact."""
+    members = []
+    for s in segments:
+        pts, _ = segment_centerline(s)
+        spts = [tuple(c * scale for c in p) for p in pts]
+        if any(norm(sub(sp, v)) <= tol for sp in spts for v in poly):
+            members.append(s)
+    return members
+
+
+def reconstruct_runs(model, segments, fittings, scale=1.0):
+    """Conduit runs as (mm-scaled vertex_list, [member_segments]) pairs.
+
+    Ports first (robust: stitches the segment<->elbow chains); if the file has no
+    usable connection ports, fall back to geometric endpoint-grouping so a run is
+    still recovered from the raw centerlines. This is the one reconstruction entry
+    point every output path (schedule, diagrams, cards) shares, so they all handle
+    port-less real-world exports identically instead of silently finding nothing.
+    """
+    runs = port_based_runs(model, segments, fittings, scale=scale, return_segments=True)
+    if runs:
+        return runs
+    geo = [poly for poly in group_into_runs(list(segments) + list(fittings), scale=scale)
+           if len(poly) >= 2]
+    return [(poly, _run_member_segments(poly, segments, scale)) for poly in geo]
 
 
 def _point_line_distance(p, a, b):
@@ -868,8 +953,10 @@ def main():
     print(f"  Units:  source = {unit}; all lengths below normalized to mm")
     print()
 
-    segments = occurrences_of(model, "IfcCableCarrierSegment", "IfcCableCarrierSegmentType")
-    fittings = occurrences_of(model, "IfcCableCarrierFitting", "IfcCableCarrierFittingType")
+    segments, fittings, n_trays = conduit_elements(model)
+    if n_trays:
+        print(f"  (skipped {n_trays} cable tray/ladder/trunking carrier(s) — "
+              f"not round conduit, not bendable here)")
     port_runs = port_based_runs(model, segments, fittings, scale=mm_scale)
     use_ports = bool(port_runs)
     print(f"Found {len(segments)} conduit segment(s), {len(fittings)} fitting(s):")

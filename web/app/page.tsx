@@ -2,14 +2,14 @@
 
 import { useCallback, useRef, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5000";
+const API = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:5050";
 
 type Stats = {
   conduit: string; conduits: number; bends: number; sticks: number;
   total_ft: number; raw_sticks: number; review: number; flags: string[];
 };
 type Result = {
-  ok: boolean; stem?: string; stats?: Stats;
+  ok: boolean; stem?: string; name?: string; stats?: Stats;
   urls?: Record<string, string>; error?: string; resolved?: boolean;
 };
 
@@ -71,7 +71,7 @@ export default function Home() {
     const s = result.stats, urls = result.urls;
     return (
       <main className="wrap">
-        <h1>{result.stem}</h1>
+        <h1>{result.name || result.stem}</h1>
         <p className="sub">{s.conduit} · fabrication package</p>
 
         {s.review > 0 && !result.resolved ? (

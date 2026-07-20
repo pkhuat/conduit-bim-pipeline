@@ -20,6 +20,7 @@ When it finishes it opens bim/out/index.html in your browser automatically; pass
 """
 
 import csv
+import glob
 import html
 import json
 import os
@@ -37,7 +38,9 @@ import qa
 import calibration as cal
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-OUTDIR = os.path.join(HERE, "out")
+# CONDUIT_OUT_DIR lets production point outputs at a writable volume shared with
+# the web API; defaults to bim/out for local/CLI use.
+OUTDIR = os.environ.get("CONDUIT_OUT_DIR") or os.path.join(HERE, "out")
 INDEX = os.path.join(OUTDIR, "index.html")
 MM_PER_FT = 304.8
 
@@ -76,14 +79,32 @@ def process_one(path, resolve_odd=False):
     stem = os.path.splitext(os.path.basename(path))[0]
     os.makedirs(OUTDIR, exist_ok=True)
 
+    # clear this stem's prior outputs first, so a re-run — or a file that now
+    # yields no conduit (e.g. a tray-only model) — can never surface stale results
+    for old in glob.glob(os.path.join(OUTDIR, f"{stem}_*")):
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+
     # 1) schedule + CSVs  (resolve_odd standardizes flagged odd-angle runs)
     info, rows = br.run_rows(path, resolve_odd=resolve_odd)
     if not rows:
-        print(f"  {os.path.basename(path)}: no conduit runs found "
-              f"(no IfcCableCarrierSegment centerlines) — nothing to fabricate. "
-              f"Is this an electrical model?")
+        n_seg = info.get("n_segments", 0)
+        n_trays = info.get("n_trays", 0)
+        if n_seg:
+            reason = (f"found {n_seg} conduit segment(s) but none yielded a "
+                      f"usable centerline (tessellated mesh / no geometry)")
+        elif n_trays:
+            reason = (f"found {n_trays} cable tray/ladder/trunking carrier(s), but no "
+                      f"round conduit — a conduit bender doesn't bend trays")
+        else:
+            reason = ("no IfcCableCarrierSegment elements — is this an electrical "
+                      "model? (HVAC/plumbing/structural files have no conduit)")
+        print(f"  {os.path.basename(path)}: no conduit runs found — {reason}. "
+              f"Nothing to fabricate.")
         print()
-        return
+        return {"ok": False, "reason": f"No conduit runs found — {reason}."}
     br.print_report(info, rows)
     runs_csv = os.path.join(OUTDIR, f"{stem}_runs.csv")
     bends_csv = os.path.join(OUTDIR, f"{stem}_bends.csv")
@@ -142,9 +163,10 @@ def process_one(path, resolve_odd=False):
     flagged = qa.flag_rows(rows, {d["run"]: d["max_dev_mm"] for d in devs})
     health_path = os.path.join(OUTDIR, f"{stem}_health.txt")
     qa.write_health(health_path, os.path.basename(path), len(rows), flagged)
-    n_odd, n_cpl, n_dft = qa.counts(flagged)
+    n_size, n_odd, n_cpl, n_dft = qa.counts(flagged)
     print(f"  DATA HEALTH — {len(flagged)} of {len(rows)} runs need review "
-          f"({n_odd} odd angle, {n_dft} drift, {n_cpl} coupler).  See {stem}_health.txt")
+          f"({n_size} unknown size, {n_odd} odd angle, {n_dft} drift, {n_cpl} coupler)."
+          f"  See {stem}_health.txt")
     print()
 
     write_index(OUTDIR)                      # refresh the landing page

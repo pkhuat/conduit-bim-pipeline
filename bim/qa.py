@@ -2,8 +2,11 @@
 
 The pipeline is honest about what it can't cleanly resolve; this collects those
 flags per run so a customer or shop reviews the handful that matter instead of
-trusting 200 runs blindly. It flags three things:
+trusting 200 runs blindly. It flags four things:
 
+  - unknown size — a bent run whose conduit OD couldn't be read, so no take-up
+                   correction and no die can be applied; it can't be fabricated
+                   as-is until someone supplies the conduit size.
   - odd angles   — bends that aren't standard trade angles (kept honest, not
                    forced to a trade angle), so someone confirms how to bend them.
   - coupler warn — a run where no valid coupler spot could be placed within a
@@ -40,6 +43,9 @@ def flag_rows(rows, dev_by_run):
     flagged = []
     for r in rows:
         issues = []
+        # a bend with no readable OD can't be take-up corrected or given a die
+        if r["bends"] and not r.get("od_mm"):
+            issues.append("unknown size: no readable OD — no take-up correction or die")
         odd = [b["angle"] for b in r["bends"] if not _is_trade(b["angle"])]
         if odd:
             issues.append("odd angle: " + ", ".join(f"{a:g}°" for a in odd))
@@ -54,21 +60,22 @@ def flag_rows(rows, dev_by_run):
 
 
 def counts(flagged):
-    """(odd, coupler, drift) run counts for a flagged list."""
+    """(unknown-size, odd, coupler, drift) run counts for a flagged list."""
     tally = lambda kind: sum(1 for f in flagged
                              if any(i.startswith(kind) for i in f["issues"]))
-    return tally("odd"), tally("coupler"), tally("drift")
+    return tally("unknown size"), tally("odd"), tally("coupler"), tally("drift")
 
 
 def render(file_name, n_runs, flagged):
     """The full data-health report as text (used for stdout and the health file)."""
-    n_odd, n_cpl, n_dft = counts(flagged)
+    n_size, n_odd, n_cpl, n_dft = counts(flagged)
     out = [
         "=" * 66,
         "  DATA HEALTH — review before fabricating",
         f"  source: {file_name}   ({n_runs} runs, {len(flagged)} need review)",
         "=" * 66,
-        f"  odd angles:  {n_odd} run(s)      couplers: {n_cpl}      drift: {n_dft}",
+        f"  unknown size: {n_size}      odd angles: {n_odd}      "
+        f"couplers: {n_cpl}      drift: {n_dft}",
         "",
     ]
     if not flagged:
@@ -81,8 +88,10 @@ def render(file_name, n_runs, flagged):
         out.append(f"   {f['run']:>4}  {f['kind']:<12}  {first}")
         out.extend(f"   {'':>4}  {'':<12}  {extra}" for extra in rest)
     out += ["",
-            "  Odd angles are kept honest (not faked to a trade angle) — confirm how",
-            "  to bend them. Drift is the trade-angle cleanup; couplers may need a re-cut."]
+            "  Unknown-size runs need a conduit size before they can be bent (no die /",
+            "  no take-up). Odd angles are kept honest (not faked to a trade angle) —",
+            "  confirm how to bend them. Drift is the trade-angle cleanup; couplers may",
+            "  need a re-cut."]
     return "\n".join(out)
 
 
