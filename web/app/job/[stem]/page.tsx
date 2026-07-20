@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  fileUrl, getJob, runMachine,
+  fileUrl, getJob, runMachine, resolveRun,
   type JobDetail, type Run, type MachineResult, type Command,
 } from "../../../lib/api";
 
@@ -34,6 +34,9 @@ export default function Workspace() {
   const [tab, setTab] = useState<Tab>("overview");
   const [machineTarget, setMachineTarget] = useState<number | null>(null);
 
+  const refresh = useCallback(
+    () => getJob(stem).then((d) => { if (d.ok) setJob(d); }).catch(() => {}),
+    [stem]);
   useEffect(() => {
     getJob(stem).then((d) => (d.ok ? setJob(d) : setErr(d.error || "Not found")))
       .catch(() => setErr("Couldn't reach the API."));
@@ -55,7 +58,7 @@ export default function Workspace() {
       </div>
 
       {tab === "overview" && <Overview job={job} />}
-      {tab === "runs" && <Runs job={job} onSend={(r) => { setMachineTarget(r); setTab("machine"); }} />}
+      {tab === "runs" && <Runs job={job} stem={stem} refresh={refresh} onSend={(r) => { setMachineTarget(r); setTab("machine"); }} />}
       {tab === "machine" && <Machine job={job} target={machineTarget} />}
     </main>
   );
@@ -103,10 +106,12 @@ function Overview({ job }: { job: JobDetail }) {
 }
 
 /* ---------------- Runs ---------------- */
-function Runs({ job, onSend }: { job: JobDetail; onSend: (run: number) => void }) {
+function Runs({ job, stem, refresh, onSend }:
+  { job: JobDetail; stem: string; refresh: () => Promise<void>; onSend: (run: number) => void }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "review" | "bent">("all");
-  const [open, setOpen] = useState<Run | null>(null);
+  const [openNo, setOpenNo] = useState<number | null>(null);
+  const open = openNo != null ? job.runs.find((r) => r.run === openNo) ?? null : null;
 
   const rows = useMemo(() => job.runs.filter((r) => {
     if (filter === "review" && r.review.length === 0) return false;
@@ -115,7 +120,8 @@ function Runs({ job, onSend }: { job: JobDetail; onSend: (run: number) => void }
     return true;
   }), [job.runs, q, filter]);
 
-  if (open) return <RunDetail run={open} onBack={() => setOpen(null)} onSend={() => onSend(open.run)} />;
+  if (open) return <RunDetail run={open} stem={stem} refresh={refresh}
+    onBack={() => setOpenNo(null)} onSend={() => onSend(open.run)} />;
 
   return (
     <>
@@ -135,7 +141,7 @@ function Runs({ job, onSend }: { job: JobDetail; onSend: (run: number) => void }
         </thead>
         <tbody>
           {rows.map((r) => (
-            <tr key={r.run} className="click" onClick={() => setOpen(r)}>
+            <tr key={r.run} className="click" onClick={() => setOpenNo(r.run)}>
               <td><b style={{ color: "var(--navy)" }}>#{r.run}</b></td>
               <td>{r.kind}{r.die ? <span className="muted"> · {r.die}</span> : null}</td>
               <td className="num">{r.length_ft}</td>
@@ -153,7 +159,18 @@ function Runs({ job, onSend }: { job: JobDetail; onSend: (run: number) => void }
   );
 }
 
-function RunDetail({ run, onBack, onSend }: { run: Run; onBack: () => void; onSend: () => void }) {
+function RunDetail({ run, stem, refresh, onBack, onSend }:
+  { run: Run; stem: string; refresh: () => Promise<void>; onBack: () => void; onSend: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const hasOdd = run.review.some((r) => r.startsWith("odd angle"));
+
+  async function standardize() {
+    setBusy(true);
+    try { await resolveRun(stem, run.run); await refresh(); }
+    catch { alert("Couldn't reach the API."); }
+    setBusy(false);
+  }
+
   return (
     <div className="detail">
       <div className="row" style={{ justifyContent: "space-between" }}>
@@ -170,12 +187,35 @@ function RunDetail({ run, onBack, onSend }: { run: Run; onBack: () => void; onSe
           <span>{run.n_bends} bends</span>
           <span>{run.n_sticks} sticks</span>
         </div>
-        {run.review.length > 0 && (
+        {run.review.length > 0 ? (
           <div className="banner warn" style={{ marginTop: 12 }}>
             {run.review.map((i, k) => <div key={k}>⚠ {i}</div>)}
+            {hasOdd && (
+              <div className="row" style={{ marginTop: 10 }}>
+                <button className="btn sm" onClick={standardize} disabled={busy}>
+                  {busy ? <><span className="spin" /> Standardizing…</> : "Standardize this run’s angles"}
+                </button>
+                <span className="muted" style={{ fontSize: 12.5 }}>Snaps the odd angle(s) to the nearest trade angle.</span>
+              </div>
+            )}
           </div>
+        ) : (
+          <div className="banner ok" style={{ marginTop: 12 }}>✓ Ready to fabricate.</div>
         )}
       </div>
+
+      {run.svg && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Run shape</h2>
+          <div className="diagram" dangerouslySetInnerHTML={{ __html: run.svg }} />
+          <div className="legend">
+            <span><i className="sw start" /> start / end</span>
+            <span><i className="sw bend" /> bend (angle labeled)</span>
+            <span><i className="sw stick" /> each color = one 10-ft stick</span>
+            <span><i className="sw cplr" /> coupler joint</span>
+          </div>
+        </div>
+      )}
 
       {run.n_bends > 0 && (
         <div className="panel">

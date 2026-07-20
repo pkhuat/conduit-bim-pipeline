@@ -75,7 +75,7 @@ def run_pieces(r):
     return out
 
 
-def process_one(path, resolve_odd=False):
+def process_one(path, resolve_odd=False, resolve_runs=None):
     stem = os.path.splitext(os.path.basename(path))[0]
     os.makedirs(OUTDIR, exist_ok=True)
 
@@ -87,8 +87,9 @@ def process_one(path, resolve_odd=False):
         except OSError:
             pass
 
-    # 1) schedule + CSVs  (resolve_odd standardizes flagged odd-angle runs)
-    info, rows = br.run_rows(path, resolve_odd=resolve_odd)
+    # 1) schedule + CSVs  (resolve_odd standardizes all odd-angle runs; resolve_runs
+    #    standardizes just the listed run numbers — a per-run fix from the app)
+    info, rows = br.run_rows(path, resolve_odd=resolve_odd, resolve_runs=resolve_runs)
     if not rows:
         n_seg = info.get("n_segments", 0)
         n_trays = info.get("n_trays", 0)
@@ -114,10 +115,12 @@ def process_one(path, resolve_odd=False):
     cutlist_csv = os.path.join(OUTDIR, f"{stem}_cutlist.csv")
     br.write_cutlist_csv(rows, cutlist_csv)
 
-    # 2) diagrams + printable per-stick bend cards
-    fname, druns = bd.cleaned_runs(path, 12)
+    # 2) diagrams + printable per-stick bend cards. Build an SVG per run (so the
+    #    web app can show each run's shape inline), then the top-12 HTML page.
+    fname, druns_all = bd.cleaned_runs(path, 10 ** 9)
+    svg_by_run = {d["run"]: bd.svg_for(d) for d in druns_all}
     html_path = os.path.join(OUTDIR, f"{stem}_diagrams.html")
-    bd.write_html(html_path, fname, druns)
+    bd.write_html(html_path, fname, druns_all[:12])
     cards_path = os.path.join(OUTDIR, f"{stem}_cards.html")
     bc.write_cards_html(cards_path, stem, rows)
 
@@ -184,6 +187,7 @@ def process_one(path, resolve_odd=False):
             "n_bends": len(r["bends"]),
             "n_sticks": len(r.get("pieces") or []),
             "review": issues_by_run.get(r["run"], []),
+            "svg": svg_by_run.get(r["run"]),      # inline run-shape diagram (or null if straight)
             "bends": [{"advance": b.get("advance", b.get("feed")), "angle": b.get("angle"),
                        "rotate": b.get("rotate"), "roll_dir": b.get("roll_dir", 0)}
                       for b in r["bends"]],

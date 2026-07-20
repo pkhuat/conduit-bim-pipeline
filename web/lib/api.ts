@@ -15,7 +15,7 @@ export type Piece = {
 export type Run = {
   run: number; kind: string; od_mm: number | null; die: string;
   length_ft: number; n_bends: number; n_sticks: number;
-  review: string[]; bends: Bend[]; pieces: Piece[];
+  review: string[]; svg: string | null; bends: Bend[]; pieces: Piece[];
 };
 export type Stats = {
   conduit: string; conduits: number; bends: number; sticks: number;
@@ -54,5 +54,12 @@ export const runMachine = (stem: string, run: number | "all") =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ run }),
   }).then(j<MachineResult>);
+
+export const resolveRun = (stem: string, run: number) =>
+  fetch(`${API}/api/jobs/${stem}/resolve-run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run }),
+  }).then(j<JobDetail>);
 
 export const fileUrl = (path: string) => `${API}${path}`;

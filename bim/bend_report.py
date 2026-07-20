@@ -44,9 +44,12 @@ def short_kind(name):
     return name[:24].strip()
 
 
-def run_rows(path, resolve_odd=False):
+def run_rows(path, resolve_odd=False, resolve_runs=None):
     """Return (header_info, [per-run dicts]) for an IFC file. With resolve_odd=True,
-    every bend is snapped to the nearest trade angle (standardize the odd ones)."""
+    every bend is snapped to the nearest trade angle (standardize the odd ones).
+    resolve_runs (a set of run numbers) force-snaps only those runs — so a single
+    flagged run can be standardized on its own from the app."""
+    resolve_runs = resolve_runs or set()
     model = ifcopenshell.open(path)
     scale = ifcopenshell.util.unit.calculate_unit_scale(model) * 1000.0
     segs, fits, n_trays = ec.conduit_elements(model)
@@ -56,8 +59,9 @@ def run_rows(path, resolve_odd=False):
     for i, (poly, run_segs) in enumerate(runs, 1):
         clean = ec.drop_near_straight(ec.simplify_polyline(poly, ec.SIMPLIFY_TOL), ec.MIN_BEND_DEG)
         bends, lengths, tail = ec.derive_bends(clean)
+        force = resolve_odd or (i in resolve_runs)
         for b in bends:
-            b["angle"] = round(ec.snap_to_trade(b["angle"], force=resolve_odd), 1)
+            b["angle"] = round(ec.snap_to_trade(b["angle"], force=force), 1)
             b["rotate"] = round(ec.snap_roll(b["rotate"]), 1)
         seg = run_segs[0] if run_segs else None
         od = ec.outer_diameter(seg) if seg else None

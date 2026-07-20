@@ -466,6 +466,54 @@ def api_machine(stem):
                        "sticks": len(sticks)}}
 
 
+def _overrides_path(stem):
+    return os.path.join(UPLOADS, f"{stem}.overrides.json")   # lives outside OUT's cleanup
+
+
+def _load_overrides(stem):
+    try:
+        with open(_overrides_path(stem)) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {"snap": []}
+
+
+@app.route("/api/jobs/<stem>/resolve-run", methods=["POST", "OPTIONS"])
+def api_resolve_run(stem):
+    """Standardize the odd angles of ONE run (accumulates across calls), re-process,
+    and return the updated job — the per-run 'resolve a flag' action from the app."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if not _valid_stem(stem):
+        return {"ok": False, "error": "Bad job id."}, 404
+    src = os.path.join(UPLOADS, f"{stem}.ifc")
+    if not os.path.exists(src):
+        return {"ok": False, "error": "Original upload not found — please upload again."}, 404
+    body = request.get_json(silent=True) or {}
+    try:
+        run_no = int(body.get("run"))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Bad run number."}, 400
+
+    ov = _load_overrides(stem)
+    snap = sorted(set(ov.get("snap", [])) | {run_no})
+    ov["snap"] = snap
+    try:
+        with open(_overrides_path(stem), "w") as fh:
+            json.dump(ov, fh)
+        with contextlib.redirect_stdout(io.StringIO()):
+            process.process_one(src, resolve_runs=set(snap))
+    except Exception as e:
+        log.exception("resolve-run failed for %s run %s", stem, run_no)
+        return {"ok": False, "error": f"Couldn't re-process — {type(e).__name__}: {e}"}, 422
+
+    rj = _load_runs(stem)
+    payload = _job_payload(stem)
+    payload["runs"] = rj["runs"] if rj else []
+    payload["sim"] = _SIM_OK
+    return payload
+
+
 @app.route("/api/resolve/<stem>", methods=["POST", "OPTIONS"])
 def api_resolve(stem):
     if request.method == "OPTIONS":
