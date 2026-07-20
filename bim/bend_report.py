@@ -44,12 +44,15 @@ def short_kind(name):
     return name[:24].strip()
 
 
-def run_rows(path, resolve_odd=False, resolve_runs=None):
+def run_rows(path, resolve_odd=False, resolve_runs=None, size_overrides=None):
     """Return (header_info, [per-run dicts]) for an IFC file. With resolve_odd=True,
     every bend is snapped to the nearest trade angle (standardize the odd ones).
     resolve_runs (a set of run numbers) force-snaps only those runs — so a single
-    flagged run can be standardized on its own from the app."""
+    flagged run can be standardized on its own from the app. size_overrides
+    ({run: od_mm}) supplies a conduit OD for runs whose size couldn't be read, so
+    take-up correction and a die can be applied."""
     resolve_runs = resolve_runs or set()
+    size_overrides = size_overrides or {}
     model = ifcopenshell.open(path)
     scale = ifcopenshell.util.unit.calculate_unit_scale(model) * 1000.0
     segs, fits, n_trays = ec.conduit_elements(model)
@@ -64,8 +67,11 @@ def run_rows(path, resolve_odd=False, resolve_runs=None):
             b["angle"] = round(ec.snap_to_trade(b["angle"], force=force), 1)
             b["rotate"] = round(ec.snap_roll(b["rotate"]), 1)
         seg = run_segs[0] if run_segs else None
-        od = ec.outer_diameter(seg) if seg else None
-        od_mm = round(od * scale, 1) if od else None
+        if i in size_overrides:
+            od_mm = size_overrides[i]
+        else:
+            od = ec.outer_diameter(seg) if seg else None
+            od_mm = round(od * scale, 1) if od else None
         pieces, warns = ec.split_into_pieces(bends, tail,
                                              radius_mm=ec.bend_radius_mm(od_mm))
         rows.append({

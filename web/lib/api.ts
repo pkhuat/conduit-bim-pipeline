@@ -62,4 +62,16 @@ export const resolveRun = (stem: string, run: number) =>
     body: JSON.stringify({ run }),
   }).then(j<JobDetail>);
 
+export type TradeSize = { size: string; od_mm: number };
+export const getTradeSizes = () =>
+  fetch(`${API}/api/trade-sizes`, { cache: "no-store" })
+    .then(j<{ ok: boolean; sizes: TradeSize[] }>);
+
+export const setSize = (stem: string, run: number, od_mm: number) =>
+  fetch(`${API}/api/jobs/${stem}/set-size`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ run, od_mm }),
+  }).then(j<JobDetail>);
+
 export const fileUrl = (path: string) => `${API}${path}`;

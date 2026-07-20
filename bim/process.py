@@ -75,7 +75,7 @@ def run_pieces(r):
     return out
 
 
-def process_one(path, resolve_odd=False, resolve_runs=None):
+def process_one(path, resolve_odd=False, resolve_runs=None, size_overrides=None):
     stem = os.path.splitext(os.path.basename(path))[0]
     os.makedirs(OUTDIR, exist_ok=True)
 
@@ -89,7 +89,8 @@ def process_one(path, resolve_odd=False, resolve_runs=None):
 
     # 1) schedule + CSVs  (resolve_odd standardizes all odd-angle runs; resolve_runs
     #    standardizes just the listed run numbers — a per-run fix from the app)
-    info, rows = br.run_rows(path, resolve_odd=resolve_odd, resolve_runs=resolve_runs)
+    info, rows = br.run_rows(path, resolve_odd=resolve_odd, resolve_runs=resolve_runs,
+                             size_overrides=size_overrides)
     if not rows:
         n_seg = info.get("n_segments", 0)
         n_trays = info.get("n_trays", 0)

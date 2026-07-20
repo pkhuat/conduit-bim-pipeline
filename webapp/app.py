@@ -475,43 +475,72 @@ def _load_overrides(stem):
         with open(_overrides_path(stem)) as fh:
             return json.load(fh)
     except (OSError, ValueError):
-        return {"snap": []}
+        return {}
 
 
-@app.route("/api/jobs/<stem>/resolve-run", methods=["POST", "OPTIONS"])
-def api_resolve_run(stem):
-    """Standardize the odd angles of ONE run (accumulates across calls), re-process,
-    and return the updated job — the per-run 'resolve a flag' action from the app."""
-    if request.method == "OPTIONS":
-        return ("", 204)
-    if not _valid_stem(stem):
-        return {"ok": False, "error": "Bad job id."}, 404
+def _reprocess_with_overrides(stem, ov):
+    """Persist the per-run overrides and re-run the pipeline applying them (snap odd
+    angles on the listed runs; supply an OD for runs whose size was set). Returns the
+    updated job payload, or an (error, status) tuple."""
     src = os.path.join(UPLOADS, f"{stem}.ifc")
     if not os.path.exists(src):
         return {"ok": False, "error": "Original upload not found — please upload again."}, 404
-    body = request.get_json(silent=True) or {}
-    try:
-        run_no = int(body.get("run"))
-    except (TypeError, ValueError):
-        return {"ok": False, "error": "Bad run number."}, 400
-
-    ov = _load_overrides(stem)
-    snap = sorted(set(ov.get("snap", [])) | {run_no})
-    ov["snap"] = snap
+    size = {int(k): float(v) for k, v in (ov.get("size") or {}).items()}
     try:
         with open(_overrides_path(stem), "w") as fh:
             json.dump(ov, fh)
         with contextlib.redirect_stdout(io.StringIO()):
-            process.process_one(src, resolve_runs=set(snap))
+            process.process_one(src, resolve_runs=set(ov.get("snap", [])), size_overrides=size)
     except Exception as e:
-        log.exception("resolve-run failed for %s run %s", stem, run_no)
+        log.exception("reprocess failed for %s", stem)
         return {"ok": False, "error": f"Couldn't re-process — {type(e).__name__}: {e}"}, 422
-
     rj = _load_runs(stem)
     payload = _job_payload(stem)
     payload["runs"] = rj["runs"] if rj else []
     payload["sim"] = _SIM_OK
     return payload
+
+
+@app.route("/api/trade-sizes")
+def api_trade_sizes():
+    """Standard conduit trade sizes (label + representative OD) for the size picker."""
+    return {"ok": True, "sizes": process.br.ec.trade_sizes()}
+
+
+@app.route("/api/jobs/<stem>/resolve-run", methods=["POST", "OPTIONS"])
+def api_resolve_run(stem):
+    """Standardize the odd angles of ONE run (accumulates across calls) and re-process."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if not _valid_stem(stem):
+        return {"ok": False, "error": "Bad job id."}, 404
+    body = request.get_json(silent=True) or {}
+    try:
+        run_no = int(body.get("run"))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Bad run number."}, 400
+    ov = _load_overrides(stem)
+    ov["snap"] = sorted(set(ov.get("snap", [])) | {run_no})
+    return _reprocess_with_overrides(stem, ov)
+
+
+@app.route("/api/jobs/<stem>/set-size", methods=["POST", "OPTIONS"])
+def api_set_size(stem):
+    """Set the conduit OD (mm) for ONE run whose size couldn't be read, then re-process
+    so take-up correction and a die apply to it."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if not _valid_stem(stem):
+        return {"ok": False, "error": "Bad job id."}, 404
+    body = request.get_json(silent=True) or {}
+    try:
+        run_no = int(body.get("run"))
+        od_mm = float(body.get("od_mm"))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "Need a run number and a conduit OD."}, 400
+    ov = _load_overrides(stem)
+    ov.setdefault("size", {})[str(run_no)] = od_mm
+    return _reprocess_with_overrides(stem, ov)
 
 
 @app.route("/api/resolve/<stem>", methods=["POST", "OPTIONS"])

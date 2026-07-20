@@ -92,6 +92,12 @@ _TRADE_BEND_RADIUS = {
 IN_MM = 25.4
 
 
+def trade_sizes():
+    """The standard trade sizes and a representative OD (mm) for each — used to let
+    a user set the conduit size on a run whose diameter couldn't be read."""
+    return [{"size": k, "od_mm": v[0]} for k, v in _TRADE_BEND_RADIUS.items()]
+
+
 def trade_size_for_od(od_mm):
     """Nearest standard trade size (key into _TRADE_BEND_RADIUS) for an outer
     diameter in mm, or None if unknown. Nearest-OD match works across conduit

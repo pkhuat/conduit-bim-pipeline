@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  fileUrl, getJob, runMachine, resolveRun,
-  type JobDetail, type Run, type MachineResult, type Command,
+  fileUrl, getJob, runMachine, resolveRun, setSize, getTradeSizes,
+  type JobDetail, type Run, type MachineResult, type Command, type TradeSize,
 } from "../../../lib/api";
 
 type Tab = "overview" | "runs" | "machine";
@@ -33,7 +33,9 @@ export default function Workspace() {
   const [err, setErr] = useState("");
   const [tab, setTab] = useState<Tab>("overview");
   const [machineTarget, setMachineTarget] = useState<number | null>(null);
+  const [sizes, setSizes] = useState<TradeSize[]>([]);
 
+  useEffect(() => { getTradeSizes().then((d) => setSizes(d.sizes)).catch(() => {}); }, []);
   const refresh = useCallback(
     () => getJob(stem).then((d) => { if (d.ok) setJob(d); }).catch(() => {}),
     [stem]);
@@ -58,7 +60,7 @@ export default function Workspace() {
       </div>
 
       {tab === "overview" && <Overview job={job} />}
-      {tab === "runs" && <Runs job={job} stem={stem} refresh={refresh} onSend={(r) => { setMachineTarget(r); setTab("machine"); }} />}
+      {tab === "runs" && <Runs job={job} stem={stem} sizes={sizes} refresh={refresh} onSend={(r) => { setMachineTarget(r); setTab("machine"); }} />}
       {tab === "machine" && <Machine job={job} target={machineTarget} />}
     </main>
   );
@@ -106,8 +108,8 @@ function Overview({ job }: { job: JobDetail }) {
 }
 
 /* ---------------- Runs ---------------- */
-function Runs({ job, stem, refresh, onSend }:
-  { job: JobDetail; stem: string; refresh: () => Promise<void>; onSend: (run: number) => void }) {
+function Runs({ job, stem, sizes, refresh, onSend }:
+  { job: JobDetail; stem: string; sizes: TradeSize[]; refresh: () => Promise<void>; onSend: (run: number) => void }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "review" | "bent">("all");
   const [openNo, setOpenNo] = useState<number | null>(null);
@@ -120,7 +122,7 @@ function Runs({ job, stem, refresh, onSend }:
     return true;
   }), [job.runs, q, filter]);
 
-  if (open) return <RunDetail run={open} stem={stem} refresh={refresh}
+  if (open) return <RunDetail run={open} stem={stem} sizes={sizes} refresh={refresh}
     onBack={() => setOpenNo(null)} onSend={() => onSend(open.run)} />;
 
   return (
@@ -159,14 +161,24 @@ function Runs({ job, stem, refresh, onSend }:
   );
 }
 
-function RunDetail({ run, stem, refresh, onBack, onSend }:
-  { run: Run; stem: string; refresh: () => Promise<void>; onBack: () => void; onSend: () => void }) {
+function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
+  { run: Run; stem: string; sizes: TradeSize[]; refresh: () => Promise<void>; onBack: () => void; onSend: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [od, setOd] = useState("");
   const hasOdd = run.review.some((r) => r.startsWith("odd angle"));
+  const hasUnknownSize = run.review.some((r) => r.startsWith("unknown size"));
 
   async function standardize() {
     setBusy(true);
     try { await resolveRun(stem, run.run); await refresh(); }
+    catch { alert("Couldn't reach the API."); }
+    setBusy(false);
+  }
+
+  async function applySize() {
+    if (!od) return;
+    setBusy(true);
+    try { await setSize(stem, run.run, Number(od)); await refresh(); }
     catch { alert("Couldn't reach the API."); }
     setBusy(false);
   }
@@ -196,6 +208,19 @@ function RunDetail({ run, stem, refresh, onBack, onSend }:
                   {busy ? <><span className="spin" /> Standardizing…</> : "Standardize this run’s angles"}
                 </button>
                 <span className="muted" style={{ fontSize: 12.5 }}>Snaps the odd angle(s) to the nearest trade angle.</span>
+              </div>
+            )}
+            {hasUnknownSize && (
+              <div className="row" style={{ marginTop: 10 }}>
+                <select value={od} onChange={(e) => setOd(e.target.value)}
+                  style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5 }}>
+                  <option value="">Set conduit size…</option>
+                  {sizes.map((s) => <option key={s.size} value={s.od_mm}>{s.size}&quot; ({s.od_mm} mm OD)</option>)}
+                </select>
+                <button className="btn sm" onClick={applySize} disabled={!od || busy}>
+                  {busy ? <><span className="spin" /> Applying…</> : "Set size"}
+                </button>
+                <span className="muted" style={{ fontSize: 12.5 }}>Enables take-up correction &amp; the die.</span>
               </div>
             )}
           </div>
@@ -244,13 +269,15 @@ function Machine({ job, target }: { job: JobDetail; target: number | null }) {
   const [phase, setPhase] = useState<"idle" | "loading" | "run" | "done">("idle");
   const [res, setRes] = useState<MachineResult | null>(null);
   const [shown, setShown] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [speed, setSpeed] = useState(1);
   const consoleRef = useRef<HTMLDivElement>(null);
 
   // pick up a run handed over from the Runs tab ("Send to machine")
   useEffect(() => { if (target != null) setSel(target); }, [target]);
 
   const start = useCallback(async () => {
-    setPhase("loading"); setRes(null); setShown(0);
+    setPhase("loading"); setRes(null); setShown(0); setPaused(false);
     try {
       const r = await runMachine(job.stem, sel);
       if (!r.ok) { setPhase("idle"); alert(r.error || "Machine run failed"); return; }
@@ -258,20 +285,34 @@ function Machine({ job, target }: { job: JobDetail; target: number | null }) {
     } catch { setPhase("idle"); alert("Couldn't reach the API."); }
   }, [job.stem, sel]);
 
-  // animate the command stream
+  const step = useCallback(() => {
+    if (!res) return;
+    setShown((s) => {
+      const next = Math.min(s + 1, res.commands.length);
+      if (next >= res.commands.length) setPhase("done");
+      return next;
+    });
+  }, [res]);
+
+  const restart = useCallback(() => {
+    if (!res) return;
+    setShown(0); setPaused(false); setPhase("run");
+  }, [res]);
+
+  // animate the command stream — honors pause and the speed control
   useEffect(() => {
-    if (phase !== "run" || !res) return;
+    if (phase !== "run" || !res || paused) return;
     const total = res.commands.length;
-    const batch = Math.max(1, Math.floor(total / 200));
+    const per = Math.max(1, Math.floor(total / 200));
     const id = setInterval(() => {
       setShown((s) => {
-        const next = s + batch;
+        const next = s + per;
         if (next >= total) { clearInterval(id); setPhase("done"); return total; }
         return next;
       });
-    }, 28);
+    }, Math.max(8, Math.round(30 / speed)));
     return () => clearInterval(id);
-  }, [phase, res]);
+  }, [phase, res, paused, speed]);
 
   useEffect(() => { if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight; }, [shown]);
 
@@ -310,6 +351,24 @@ function Machine({ job, target }: { job: JobDetail; target: number | null }) {
           <span className="muted">{res ? `${shown} / ${total} commands` : "idle"}</span>
           {res && <span className="muted">{res.counts.sticks} sticks · {res.counts.warnings} warnings{res.truncated ? " · truncated" : ""}</span>}
         </div>
+
+        {res && (
+          <div className="row" style={{ marginTop: 12, gap: 8 }}>
+            {phase === "run" && (
+              <button className="btn ghost sm" onClick={() => setPaused((p) => !p)}>
+                {paused ? "▶ Resume" : "❚❚ Pause"}
+              </button>
+            )}
+            <button className="btn ghost sm" onClick={step} disabled={shown >= total}>Step ▷</button>
+            <button className="btn ghost sm" onClick={restart}>↺ Restart</button>
+            <span className="muted" style={{ fontSize: 12.5, marginLeft: 4 }}>Speed</span>
+            <div className="seg">
+              {[0.5, 1, 2, 4].map((s) => (
+                <button key={s} className={speed === s ? "on" : ""} onClick={() => setSpeed(s)}>{s}×</button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="axes">
           {AXES.map((n) => (
