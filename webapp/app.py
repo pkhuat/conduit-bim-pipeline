@@ -13,6 +13,7 @@ Simulation/office tool only; produces the machine-ready job, does not drive hard
 
 import csv
 import io
+import json
 import logging
 import os
 import re
@@ -34,6 +35,14 @@ OUT = os.environ.get("CONDUIT_OUT_DIR") or os.path.join(BIM, "out")
 UPLOADS = os.environ.get("CONDUIT_UPLOAD_DIR") or os.path.join(HERE, "uploads")
 sys.path.insert(0, BIM)
 import process  # noqa: E402  (the pipeline)
+
+sys.path.insert(0, ROOT)
+try:
+    import run_stick_job as _driver              # bend_one / run_stick choreography
+    from machine.sim_machine import SimMachine   # safe: opens no serial port, nothing moves
+    _SIM_OK = True
+except Exception:                                # machine/ not present -> machine view disabled
+    _SIM_OK = False
 
 # --- configuration (env-overridable for production) ---------------------------
 PORT = int(os.environ.get("PORT", "5050"))
@@ -364,6 +373,97 @@ def api_process():
                 f"No conduit runs found in {f.filename}. Is this an electrical model? "
                 "(HVAC / plumbing / structural have no conduit.)"}, 200
     return _job_payload(stem)
+
+
+def _load_runs(stem):
+    """The structured per-run data (bim/out/<stem>_runs.json), or None."""
+    try:
+        with open(os.path.join(OUT, f"{stem}_runs.json")) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+@app.route("/api/jobs")
+def api_jobs():
+    """Every processed job (a building), newest first — for the jobs list."""
+    jobs = []
+    try:
+        for fn in os.listdir(OUT):
+            if not fn.endswith("_runs.json"):
+                continue
+            stem = fn[:-len("_runs.json")]
+            s = read_stats(stem)
+            jobs.append({"stem": stem, "name": _display_name(stem),
+                         "conduit": s["conduit"], "conduits": s["conduits"],
+                         "bends": s["bends"], "review": s["review"],
+                         "mtime": os.path.getmtime(os.path.join(OUT, fn))})
+    except OSError:
+        pass
+    jobs.sort(key=lambda j: j["mtime"], reverse=True)
+    return {"ok": True, "jobs": jobs}
+
+
+@app.route("/api/jobs/<stem>")
+def api_job(stem):
+    """One job: summary stats + output URLs + every run (for navigation)."""
+    if not _valid_stem(stem):
+        return {"ok": False, "error": "Bad job id."}, 404
+    rj = _load_runs(stem)
+    if rj is None:
+        return {"ok": False, "error": "Job not found."}, 404
+    payload = _job_payload(stem)
+    payload["runs"] = rj["runs"]
+    payload["sim"] = _SIM_OK
+    return payload
+
+
+@app.route("/api/jobs/<stem>/machine", methods=["POST", "OPTIONS"])
+def api_machine(stem):
+    """Drive the conduit through the machine SIMULATOR and return the real
+    ClearCore command log. Simulation only — opens no serial port, moves nothing."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if not _valid_stem(stem):
+        return {"ok": False, "error": "Bad job id."}, 404
+    if not _SIM_OK:
+        return {"ok": False, "error": "Machine simulator unavailable on this server."}, 503
+    rj = _load_runs(stem)
+    if rj is None:
+        return {"ok": False, "error": "Job not found."}, 404
+
+    body = request.get_json(silent=True) or {}
+    which = body.get("run", "all")
+    runs = rj["runs"]
+    if which != "all":
+        try:
+            which = int(which)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Bad run number."}, 400
+        runs = [r for r in runs if r["run"] == which]
+        if not runs:
+            return {"ok": False, "error": f"Run {which} not found."}, 404
+
+    machine = SimMachine(verbose=False)
+    sticks = []
+    for r in runs:
+        for p in r.get("pieces", []):
+            if not p.get("bends"):
+                continue
+            _driver.run_stick(machine, p["bends"],
+                              f"run {r['run']} stick {p['piece']}", verbose=False)
+            sticks.append({"run": r["run"], "piece": p["piece"], "bends": len(p["bends"])})
+
+    CAP = 6000  # keep the payload sane if a whole building is driven
+    hist = machine.history
+    commands = [{"board": b, "cmd": c, "response": resp} for (b, c, resp) in hist[:CAP]]
+    final = {name: {"position": round(ax["position"], 2), "enabled": ax["enabled"]}
+             for name, ax in machine.axes.items()}
+    return {"ok": True, "stem": stem, "run": which, "sticks": sticks,
+            "commands": commands, "truncated": len(hist) > CAP,
+            "warnings": machine.warnings, "final_state": final,
+            "counts": {"commands": len(hist), "warnings": len(machine.warnings),
+                       "sticks": len(sticks)}}
 
 
 @app.route("/api/resolve/<stem>", methods=["POST", "OPTIONS"])

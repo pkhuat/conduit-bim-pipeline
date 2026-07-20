@@ -169,6 +169,29 @@ def process_one(path, resolve_odd=False):
           f"  See {stem}_health.txt")
     print()
 
+    # 5) structured per-run JSON — the data spine the web app reads (fast, no
+    #    re-parse) to list/navigate runs and to drive the machine simulator.
+    issues_by_run = {f["run"]: f["issues"] for f in flagged}
+    runs_json = {
+        "stem": stem,
+        "schema": info.get("schema"),
+        "runs": [{
+            "run": r["run"],
+            "kind": r["kind"],
+            "od_mm": r["od_mm"],
+            "die": br.ec.die_label(r["kind"], r["od_mm"]),
+            "length_ft": round(r["length_mm"] / MM_PER_FT, 1),
+            "n_bends": len(r["bends"]),
+            "n_sticks": len(r.get("pieces") or []),
+            "review": issues_by_run.get(r["run"], []),
+            "bends": [{"advance": b.get("advance", b.get("feed")), "angle": b.get("angle"),
+                       "rotate": b.get("rotate"), "roll_dir": b.get("roll_dir", 0)}
+                      for b in r["bends"]],
+            "pieces": run_pieces(r),
+        } for r in rows],
+    }
+    json.dump(runs_json, open(os.path.join(OUTDIR, f"{stem}_runs.json"), "w"), indent=2)
+
     write_index(OUTDIR)                      # refresh the landing page
 
     rel = os.path.relpath

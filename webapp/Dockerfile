@@ -11,8 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# the API imports the pipeline, which lives in bim/
+# the API imports the pipeline (bim/) and the machine simulator (machine/ +
+# run_stick_job.py) for the shop-floor "run the machine" view
 COPY bim/ ./bim/
+COPY machine/ ./machine/
+COPY run_stick_job.py ./run_stick_job.py
 COPY webapp/ ./webapp/
 
 ENV PORT=5050 \
