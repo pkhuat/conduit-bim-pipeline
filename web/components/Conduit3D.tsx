@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Bounds, Html, GizmoHelper, GizmoViewport } from "@react-three/drei";
 import * as THREE from "three";
@@ -18,6 +18,7 @@ function toLocal(verts: number[][]) {
 }
 
 function Scene({ verts, angles }: Path3D) {
+  const [hovered, setHovered] = useState<number | null>(null);
   // centre/scale the path, and derive the roll (bend-plane change) at each bend
   const { points, rolls } = useMemo(() => {
     const pts = toLocal(verts);
@@ -57,23 +58,29 @@ function Scene({ verts, angles }: Path3D) {
             <meshStandardMaterial color="#2f9e63" emissive="#154" emissiveIntensity={0.3} />
           </mesh>
         ))}
-        {/* bends + angle labels */}
+        {/* bend markers — label only the hovered one, so the shape stays clean */}
         {bends.map((p, i) => (
           <group key={i} position={[p.x, p.y, p.z]}>
-            <mesh>
-              <sphereGeometry args={[0.2, 18, 18]} />
-              <meshStandardMaterial color="#ff5a4d" emissive="#611" emissiveIntensity={0.3} />
+            <mesh
+              onPointerOver={(e) => { e.stopPropagation(); setHovered(i); document.body.style.cursor = "pointer"; }}
+              onPointerOut={() => { setHovered((h) => (h === i ? null : h)); document.body.style.cursor = "default"; }}
+            >
+              <sphereGeometry args={[hovered === i ? 0.3 : 0.2, 18, 18]} />
+              <meshStandardMaterial color={hovered === i ? "#ffd24d" : "#ff5a4d"} emissive="#611" emissiveIntensity={0.35} />
             </mesh>
-            <Html center distanceFactor={11} zIndexRange={[10, 0]}>
-              <div style={{
-                background: "rgba(13,20,19,.86)", padding: "2px 7px", borderRadius: 7,
-                fontFamily: "var(--font-mono, monospace)", border: "1px solid #00c2cb55",
-                whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.25,
-              }}>
-                <div style={{ color: "#eafcff", fontSize: 12.5, fontWeight: 600 }}>{angles[i]}&deg;</div>
-                {rolls[i] ? <div style={{ color: "#5fdbe3", fontSize: 10.5 }}>roll {rolls[i]}&deg;</div> : null}
-              </div>
-            </Html>
+            {hovered === i && (
+              <Html center distanceFactor={10} zIndexRange={[100, 0]} style={{ pointerEvents: "none" }}>
+                <div style={{
+                  transform: "translateY(-150%)",
+                  background: "rgba(13,20,19,.92)", padding: "3px 9px", borderRadius: 8,
+                  fontFamily: "var(--font-mono, monospace)", border: "1px solid #00c2cb88",
+                  whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.3, boxShadow: "0 4px 14px rgba(0,0,0,.5)",
+                }}>
+                  <div style={{ color: "#eafcff", fontSize: 13, fontWeight: 600 }}>bend {i + 1}: {angles[i]}&deg;</div>
+                  {rolls[i] ? <div style={{ color: "#5fdbe3", fontSize: 11 }}>roll {rolls[i]}&deg;</div> : null}
+                </div>
+              </Html>
+            )}
           </group>
         ))}
       </group>
@@ -86,7 +93,7 @@ export default function Conduit3D({ verts, angles }: Path3D) {
     return <div style={{ padding: 24, color: "var(--muted)", fontSize: 13 }}>No 3-D path for this run.</div>;
   }
   return (
-    <div style={{ height: 380, borderRadius: 10, overflow: "hidden", background: "#0e1514", border: "1px solid var(--border)" }}>
+    <div style={{ position: "relative", height: 380, borderRadius: 10, overflow: "hidden", background: "#0e1514", border: "1px solid var(--border)" }}>
       <Canvas camera={{ position: [9, 7, 11], fov: 40 }} dpr={[1, 2]}>
         <hemisphereLight args={["#cfeff2", "#0a1211", 0.7]} />
         <directionalLight position={[10, 16, 8]} intensity={1.15} />
@@ -98,6 +105,12 @@ export default function Conduit3D({ verts, angles }: Path3D) {
           <GizmoViewport axisColors={["#e06", "#0c9", "#29f"]} labelColor="#dfe" />
         </GizmoHelper>
       </Canvas>
+      <div style={{
+        position: "absolute", left: 12, bottom: 10, fontSize: 11.5, color: "#7fa39f",
+        fontFamily: "var(--font-mono, monospace)", pointerEvents: "none",
+      }}>
+        drag to orbit &middot; scroll to zoom &middot; hover a bend for angle &amp; roll
+      </div>
     </div>
   );
 }
