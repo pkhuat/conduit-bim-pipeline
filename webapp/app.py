@@ -506,9 +506,19 @@ def _manual_geometry(bends):
         d = rot(d, m2, b["angle"]); m1 = rot(m1, m2, b["angle"])
         angles.append(round(b["angle"], 1))
     p = tuple(p[i] + d[i] * 152.4 for i in range(3)); verts.append(p)   # tail so the end shows
-    run = {"run": 0, "kind": "manual", "length_ft": 0, "verts": verts,
-           "angles": angles, "cuts": [], "sticks": 1}
-    path = {"verts": [[round(c, 1) for c in v] for v in verts], "angles": angles, "cuts": []}
+    # 10-ft stick boundaries (couplers) along the centerline — same as real conduit
+    STICK = 3048.0
+    cum = [0.0]
+    for i in range(len(verts) - 1):
+        cum.append(cum[-1] + math.dist(verts[i], verts[i + 1]))
+    total = cum[-1]
+    cuts = []
+    k = 1
+    while k * STICK < total - 25.0:
+        cuts.append(round(k * STICK, 1)); k += 1
+    run = {"run": 0, "kind": "manual", "length_ft": total / 304.8, "verts": verts,
+           "angles": angles, "cuts": cuts, "sticks": len(cuts) + 1}
+    path = {"verts": [[round(c, 1) for c in v] for v in verts], "angles": angles, "cuts": cuts}
     try:
         return process.bd.svg_for(run), path
     except Exception:
