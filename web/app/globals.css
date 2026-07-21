@@ -38,14 +38,14 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #1a2221; --surface: #232e2d; --sunken: #1d2726;
-    --border: #31403e; --border-2: #405150;
-    --ink: #e9efee; --ink-2: #adbbb9; --muted: #7e8f8d;
-    --accent: #19c2ca; --accent-2: #35d3db; --accent-text: #40d3da; --accent-weak: #12302f;
-    --btn-bg: #00adb5; --btn-bg-hover: #17c0c8; --btn-fg: #0d1e1d;
-    --good: #3fb37c; --good-weak: #102a1f; --warn: #d98a4a; --warn-weak: #2a1d10;
-    --danger: #e0645a; --ring: rgba(25, 194, 202, .5);
-    --shadow-1: 0 1px 2px rgba(0, 0, 0, .35); --shadow-2: 0 8px 26px rgba(0, 0, 0, .45);
+    --bg: #0d1413; --surface: #18211f; --sunken: #101817;
+    --border: #2a3835; --border-2: #384845;
+    --ink: #eef3f1; --ink-2: #b1bfbc; --muted: #7f8e8b;
+    --accent: #1ac7cf; --accent-2: #3ad8df; --accent-text: #48dce3; --accent-weak: #103130;
+    --btn-bg: #1ac7cf; --btn-bg-hover: #33d6dd; --btn-fg: #04211f;
+    --good: #34c184; --good-weak: #0e2a1e; --warn: #e0954f; --warn-weak: #2c1e11;
+    --danger: #e0645a; --ring: rgba(26, 199, 207, .5);
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, .5); --shadow-2: 0 12px 32px rgba(0, 0, 0, .6);
   }
 }
 
@@ -98,12 +98,13 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; color: var(--ink
 }
 .btn:hover { background: var(--btn-bg-hover); transform: translateY(-1px); box-shadow: var(--shadow-2); }
 .btn:active { transform: translateY(0); }
-.btn:disabled { opacity: .45; cursor: default; box-shadow: none; transform: none; }
 .btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--border-2); box-shadow: var(--shadow-1); }
 .btn.ghost:hover { background: var(--sunken); border-color: var(--accent); color: var(--accent-text); }
-.btn.green { background: var(--good); color: #fff; }
-.btn.green:hover { background: color-mix(in srgb, var(--good) 88%, #000); }
+/* one accent: primary actions (incl. "green"/go) share the brand fill */
+.btn.green { background: var(--btn-bg); color: var(--btn-fg); }
+.btn.green:hover { background: var(--btn-bg-hover); }
 .btn.sm { padding: 7px 12px; font-size: 13px; border-radius: 9px; }
+.btn:disabled, .btn:disabled:hover { background: var(--sunken); color: var(--muted); border-color: var(--border); box-shadow: none; transform: none; cursor: default; }
 
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 
