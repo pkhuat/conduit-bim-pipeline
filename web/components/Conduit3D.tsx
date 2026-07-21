@@ -18,7 +18,24 @@ function toLocal(verts: number[][]) {
 }
 
 function Scene({ verts, angles }: Path3D) {
-  const points = useMemo(() => toLocal(verts), [verts]);
+  // centre/scale the path, and derive the roll (bend-plane change) at each bend
+  const { points, rolls } = useMemo(() => {
+    const pts = toLocal(verts);
+    const dirs: THREE.Vector3[] = [];
+    for (let i = 1; i < pts.length; i++) dirs.push(pts[i].clone().sub(pts[i - 1]).normalize());
+    const normals: (THREE.Vector3 | null)[] = [];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const n = new THREE.Vector3().crossVectors(dirs[i - 1], dirs[i]);
+      normals.push(n.length() > 1e-4 ? n.normalize() : null);
+    }
+    const rolls = normals.map((n, i) => {
+      if (i === 0 || !n || !normals[i - 1]) return 0;          // first bend = reference plane
+      const d = THREE.MathUtils.clamp(normals[i - 1]!.dot(n), -1, 1);
+      return Math.round(THREE.MathUtils.radToDeg(Math.acos(d)));
+    });
+    return { points: pts, rolls };
+  }, [verts]);
+
   const tube = useMemo(() => {
     if (points.length < 2) return null;
     const curve = new THREE.CatmullRomCurve3(points, false, "centripetal", 0.5);
@@ -48,11 +65,14 @@ function Scene({ verts, angles }: Path3D) {
               <meshStandardMaterial color="#ff5a4d" emissive="#611" emissiveIntensity={0.3} />
             </mesh>
             <Html center distanceFactor={11} zIndexRange={[10, 0]}>
-              <span style={{
-                background: "rgba(13,20,19,.85)", color: "#eafcff", padding: "1px 6px",
-                borderRadius: 6, fontSize: 12, fontFamily: "var(--font-mono, monospace)",
-                border: "1px solid #00c2cb55", whiteSpace: "nowrap",
-              }}>{angles[i]}&deg;</span>
+              <div style={{
+                background: "rgba(13,20,19,.86)", padding: "2px 7px", borderRadius: 7,
+                fontFamily: "var(--font-mono, monospace)", border: "1px solid #00c2cb55",
+                whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.25,
+              }}>
+                <div style={{ color: "#eafcff", fontSize: 12.5, fontWeight: 600 }}>{angles[i]}&deg;</div>
+                {rolls[i] ? <div style={{ color: "#5fdbe3", fontSize: 10.5 }}>roll {rolls[i]}&deg;</div> : null}
+              </div>
             </Html>
           </group>
         ))}
