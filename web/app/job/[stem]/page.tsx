@@ -259,7 +259,7 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
             </div>
           </div>
           {view3d && run.path ? (
-            <Conduit3D verts={run.path.verts} angles={run.path.angles} />
+            <Conduit3D verts={run.path.verts} angles={run.path.angles} cuts={run.path.cuts} />
           ) : run.svg ? (
             <>
               <div className="diagram" dangerouslySetInnerHTML={{ __html: run.svg }} />

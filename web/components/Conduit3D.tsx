@@ -7,52 +7,110 @@ import * as THREE from "three";
 
 export type Path3D = { verts: number[][]; angles: number[]; cuts?: number[] };
 
-/* Model space is Z-up (Revit); Three.js is Y-up → map (x,y,z) → (x, z, y). */
-function toLocal(verts: number[][]) {
-  const pts = verts.map((v) => new THREE.Vector3(v[0], v[2], v[1]));
-  const box = new THREE.Box3().setFromPoints(pts);
+// one color per 10-ft stick (cycled), matching the 2-D diagram's intent
+const STICK_COLORS = ["#2f9bd6", "#8a6cf0", "#e0a53a", "#37b3ab", "#ee7b3a", "#d24d9a", "#7c8ba0"];
+const seglen = (a: number[], b: number[]) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+
+/* Build local geometry: recentre + scale, split into 10-ft sticks at the cut
+   distances, and locate the couplers. Model is Z-up (Revit) → Three is Y-up. */
+function build(verts: number[][], cuts: number[]) {
+  const V = verts.map((v) => new THREE.Vector3(v[0], v[2], v[1]));
+  const box = new THREE.Box3().setFromPoints(V);
   const c = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
   const s = 10 / (Math.max(size.x, size.y, size.z) || 1);
-  return pts.map((p) => p.clone().sub(c).multiplyScalar(s));
+  const tf = (v: number[]) => new THREE.Vector3(v[0], v[2], v[1]).sub(c).multiplyScalar(s);
+
+  const cum = [0];
+  for (let i = 0; i < verts.length - 1; i++) cum.push(cum[i] + seglen(verts[i], verts[i + 1]));
+  const total = cum[cum.length - 1];
+  const pointAt = (d: number): number[] => {
+    if (d <= 0) return verts[0];
+    if (d >= total) return verts[verts.length - 1];
+    for (let i = 0; i < verts.length - 1; i++)
+      if (cum[i] <= d && d <= cum[i + 1]) {
+        const t = (d - cum[i]) / ((cum[i + 1] - cum[i]) || 1);
+        const a = verts[i], b = verts[i + 1];
+        return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+      }
+    return verts[verts.length - 1];
+  };
+  const dirAt = (d: number): number[] => {
+    for (let i = 0; i < verts.length - 1; i++)
+      if (cum[i] <= d && d <= cum[i + 1]) return [verts[i + 1][0] - verts[i][0], verts[i + 1][1] - verts[i][1], verts[i + 1][2] - verts[i][2]];
+    return [1, 0, 0];
+  };
+
+  const bounds = [0, ...cuts, total];
+  const sticks: THREE.Vector3[][] = [];
+  for (let k = 0; k < bounds.length - 1; k++) {
+    const lo = bounds[k], hi = bounds[k + 1];
+    const raw: number[][] = [pointAt(lo)];
+    for (let i = 0; i < verts.length; i++) if (cum[i] > lo + 1e-6 && cum[i] < hi - 1e-6) raw.push(verts[i]);
+    raw.push(pointAt(hi));
+    sticks.push(raw.map(tf));
+  }
+
+  const couplers = cuts.map((d) => {
+    const o = dirAt(d);
+    const dir = new THREE.Vector3(o[0], o[2], o[1]).normalize();
+    return {
+      pos: tf(pointAt(d)),
+      quat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir),
+    };
+  });
+
+  return { sticks, couplers, localVerts: verts.map(tf) };
 }
 
-function Scene({ verts, angles }: Path3D) {
+function Scene({ verts, angles, cuts }: Path3D) {
   const [hovered, setHovered] = useState<number | null>(null);
-  // centre/scale the path, and derive the roll (bend-plane change) at each bend
-  const { points, rolls } = useMemo(() => {
-    const pts = toLocal(verts);
+
+  const { sticks, couplers, localVerts, rolls } = useMemo(() => {
+    const b = build(verts, cuts || []);
+    const p = b.localVerts;
     const dirs: THREE.Vector3[] = [];
-    for (let i = 1; i < pts.length; i++) dirs.push(pts[i].clone().sub(pts[i - 1]).normalize());
+    for (let i = 1; i < p.length; i++) dirs.push(p[i].clone().sub(p[i - 1]).normalize());
     const normals: (THREE.Vector3 | null)[] = [];
-    for (let i = 1; i < pts.length - 1; i++) {
+    for (let i = 1; i < p.length - 1; i++) {
       const n = new THREE.Vector3().crossVectors(dirs[i - 1], dirs[i]);
       normals.push(n.length() > 1e-4 ? n.normalize() : null);
     }
     const rolls = normals.map((n, i) => {
-      if (i === 0 || !n || !normals[i - 1]) return 0;          // first bend = reference plane
-      const d = THREE.MathUtils.clamp(normals[i - 1]!.dot(n), -1, 1);
-      return Math.round(THREE.MathUtils.radToDeg(Math.acos(d)));
+      if (i === 0 || !n || !normals[i - 1]) return 0;
+      return Math.round(THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(normals[i - 1]!.dot(n), -1, 1))));
     });
-    return { points: pts, rolls };
-  }, [verts]);
+    return { ...b, rolls };
+  }, [verts, cuts]);
 
-  const tube = useMemo(() => {
-    if (points.length < 2) return null;
-    const curve = new THREE.CatmullRomCurve3(points, false, "centripetal", 0.5);
-    return new THREE.TubeGeometry(curve, Math.max(80, points.length * 20), 0.14, 14, false);
-  }, [points]);
-  if (!tube) return null;
-  const bends = points.slice(1, -1);
+  const stickTubes = useMemo(() => sticks.map((sv) => {
+    if (sv.length < 2) return null;
+    const curve = sv.length === 2
+      ? new THREE.LineCurve3(sv[0], sv[1])
+      : new THREE.CatmullRomCurve3(sv, false, "centripetal", 0.5);
+    return new THREE.TubeGeometry(curve, Math.max(24, sv.length * 16), 0.14, 14, false);
+  }), [sticks]);
+
+  const bends = localVerts.slice(1, -1);
 
   return (
     <Bounds fit clip observe margin={1.25}>
       <group>
-        <mesh geometry={tube}>
-          <meshStandardMaterial color="#00c2cb" metalness={0.35} roughness={0.35} />
-        </mesh>
+        {/* one colored tube per 10-ft stick */}
+        {stickTubes.map((g, i) => g && (
+          <mesh key={i} geometry={g}>
+            <meshStandardMaterial color={STICK_COLORS[i % STICK_COLORS.length]} metalness={0.25} roughness={0.45} />
+          </mesh>
+        ))}
+        {/* couplers — silver collars where two sticks join */}
+        {couplers.map((cp, i) => (
+          <mesh key={i} position={cp.pos} quaternion={cp.quat}>
+            <cylinderGeometry args={[0.21, 0.21, 0.55, 18]} />
+            <meshStandardMaterial color="#d3dbd9" metalness={0.75} roughness={0.25} />
+          </mesh>
+        ))}
         {/* start / end, labeled */}
-        {[points[0], points[points.length - 1]].map((p, i) => (
+        {[localVerts[0], localVerts[localVerts.length - 1]].map((p, i) => (
           <group key={i} position={[p.x, p.y, p.z]}>
             <mesh>
               <sphereGeometry args={[0.26, 18, 18]} />
@@ -67,7 +125,7 @@ function Scene({ verts, angles }: Path3D) {
             </Html>
           </group>
         ))}
-        {/* bend markers — label only the hovered one, so the shape stays clean */}
+        {/* bends — label the hovered one */}
         {bends.map((p, i) => (
           <group key={i} position={[p.x, p.y, p.z]}>
             <mesh
@@ -97,7 +155,7 @@ function Scene({ verts, angles }: Path3D) {
   );
 }
 
-export default function Conduit3D({ verts, angles }: Path3D) {
+export default function Conduit3D({ verts, angles, cuts }: Path3D) {
   if (!verts || verts.length < 2) {
     return <div style={{ padding: 24, color: "var(--muted)", fontSize: 13 }}>No 3-D path for this run.</div>;
   }
@@ -108,7 +166,7 @@ export default function Conduit3D({ verts, angles }: Path3D) {
         <directionalLight position={[10, 16, 8]} intensity={1.15} />
         <directionalLight position={[-8, -3, -6]} intensity={0.35} />
         <gridHelper args={[60, 30, "#1e3a38", "#152825"]} position={[0, -4, 0]} />
-        <Scene verts={verts} angles={angles} />
+        <Scene verts={verts} angles={angles} cuts={cuts} />
         <OrbitControls makeDefault enableDamping dampingFactor={0.1} />
         <GizmoHelper alignment="bottom-right" margin={[64, 64]}>
           <GizmoViewport axisColors={["#e06", "#0c9", "#29f"]} labelColor="#dfe" />
@@ -116,9 +174,9 @@ export default function Conduit3D({ verts, angles }: Path3D) {
       </Canvas>
       <div style={{
         position: "absolute", left: 12, bottom: 10, fontSize: 11.5, color: "#7fa39f",
-        fontFamily: "var(--font-mono, monospace)", pointerEvents: "none",
+        fontFamily: "var(--font-mono, monospace)", pointerEvents: "none", lineHeight: 1.5,
       }}>
-        drag to orbit &middot; scroll to zoom &middot; hover a bend for angle &amp; roll
+        drag to orbit &middot; each color = one 10-ft stick &middot; silver collar = coupler<br />hover a bend for angle &amp; roll
       </div>
     </div>
   );
