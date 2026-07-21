@@ -153,7 +153,7 @@ function Runs({ job, stem, sizes, refresh, onSend, onQueue }:
                 <td onClick={(e) => e.stopPropagation()}>
                   {r.n_bends > 0 && <input type="checkbox" checked={sel.has(r.run)} onChange={() => toggle(r.run)} aria-label={`Select run ${r.run}`} />}
                 </td>
-                <td><b style={{ color: "var(--navy)" }}>#{r.run}</b></td>
+                <td><b style={{ color: "var(--accent-text)" }}>#{r.run}</b></td>
                 <td>{r.kind}{r.die ? <span className="muted"> · {r.die}</span> : null}</td>
                 <td className="num">{r.length_ft}</td>
                 <td className="num">{r.n_bends}</td>
@@ -226,7 +226,7 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
             {hasUnknownSize && (
               <div className="row" style={{ marginTop: 10 }}>
                 <select value={od} onChange={(e) => setOd(e.target.value)}
-                  style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5 }}>
+                  style={{ padding: "7px 10px", borderRadius: 8, border: "1px solid var(--border-2)", fontSize: 13.5 }}>
                   <option value="">Set conduit size…</option>
                   {sizes.map((s) => <option key={s.size} value={s.od_mm}>{s.size}&quot; ({s.od_mm} mm OD)</option>)}
                 </select>
@@ -397,7 +397,7 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
               </div>
             ) : (
               <select value={String(sel)} onChange={(e) => setSel(e.target.value === "all" ? "all" : Number(e.target.value))}
-                style={{ padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 14, flex: 1 }}>
+                style={{ padding: "8px 10px", borderRadius: 9, border: "1px solid var(--border-2)", fontSize: 14, flex: 1 }}>
                 {bent.map((r) => <option key={r.run} value={r.run}>Run #{r.run} — {r.kind}, {r.n_bends} bends</option>)}
                 <option value="all">Whole building — every bent run</option>
               </select>

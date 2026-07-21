@@ -4,6 +4,7 @@
    Type:  IBM Plex Sans (UI) + IBM Plex Mono (data / commands / measurements)
    ========================================================================== */
 :root {
+  color-scheme: light;   /* native controls (number spinners, checkboxes, selects) render light */
   --font-ui: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-data: var(--font-mono), ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 
@@ -38,6 +39,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;   /* native control spinners/checkboxes render for dark */
     --bg: #0d1413; --surface: #18211f; --sunken: #101817;
     --border: #2a3835; --border-2: #384845;
     --ink: #eef3f1; --ink-2: #b1bfbc; --muted: #7f8e8b;

@@ -7,7 +7,7 @@ import { AXES, freshAxes, applyCmd } from "../../lib/machine";
 
 const STANDARD = [22.5, 30, 45, 90];
 const clampAngle = (v: number) => Math.max(0, Math.min(90, isNaN(v) ? 0 : v));
-const cell: React.CSSProperties = { width: 92, padding: "7px 9px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 14 };
+const cell: React.CSSProperties = { width: 96, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border-2)", background: "var(--surface)", color: "var(--ink)", fontSize: 14 };
 
 export default function BendBuilder() {
   const [count, setCount] = useState(1);
@@ -77,7 +77,7 @@ export default function BendBuilder() {
             <div className="row" style={{ marginTop: 8, alignItems: "center", gap: 8 }}>
               <input type="number" min={0} max={90} step={0.5} value={bends[0].angle}
                 onChange={(e) => set(0, "angle", clampAngle(parseFloat(e.target.value)))}
-                style={{ ...cell, width: 130, fontSize: 20, fontWeight: 700, color: "var(--navy)" }} />
+                style={{ ...cell, width: 130, fontSize: 20, fontWeight: 700, color: "var(--accent-text)" }} />
               <span className="muted" style={{ fontSize: 18 }}>degrees</span>
             </div>
             <div className="row" style={{ marginTop: 12, gap: 8, alignItems: "center" }}>
@@ -97,7 +97,7 @@ export default function BendBuilder() {
               <tbody>
                 {bends.slice(0, count).map((b, i) => (
                   <tr key={i}>
-                    <td><b style={{ color: "var(--navy)" }}>#{i + 1}</b></td>
+                    <td><b style={{ color: "var(--accent-text)" }}>#{i + 1}</b></td>
                     <td><input type="number" min={0} max={90} step={0.5} value={b.angle}
                       onChange={(e) => set(i, "angle", clampAngle(parseFloat(e.target.value)))} style={cell} /></td>
                     <td><input type="number" step={0.5} value={b.roll}

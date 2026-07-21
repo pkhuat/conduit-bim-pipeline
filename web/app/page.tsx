@@ -113,7 +113,7 @@ export default function Home() {
           <tbody>
             {jobs.map((jb) => (
               <tr key={jb.stem} className="click" onClick={() => router.push(`/job/${jb.stem}`)}>
-                <td><b style={{ color: "var(--navy)" }}>{jb.name}</b></td>
+                <td><b style={{ color: "var(--accent-text)" }}>{jb.name}</b></td>
                 <td className="muted">{jb.conduit}</td>
                 <td className="num">{jb.conduits}</td>
                 <td className="num">{jb.bends}</td>
