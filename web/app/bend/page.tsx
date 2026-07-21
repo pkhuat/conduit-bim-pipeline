@@ -4,6 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { runManual, type MachineResult, type Command, type ManualBend } from "../../lib/api";
 import { AXES, freshAxes, applyCmd } from "../../lib/machine";
+import dynamic from "next/dynamic";
+
+const Conduit3D = dynamic(() => import("../../components/Conduit3D"), {
+  ssr: false,
+  loading: () => <div className="empty" style={{ height: 380 }}>Loading 3-D viewer…</div>,
+});
 
 const STANDARD = [22.5, 30, 45, 90];
 const clampAngle = (v: number) => Math.max(0, Math.min(90, isNaN(v) ? 0 : v));
@@ -20,6 +26,7 @@ export default function BendBuilder() {
   const [res, setRes] = useState<MachineResult | null>(null);
   const [shown, setShown] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [view3d, setView3d] = useState(true);
   const consoleRef = useRef<HTMLDivElement>(null);
   const diagRef = useRef<HTMLDivElement>(null);
 
@@ -140,10 +147,18 @@ export default function BendBuilder() {
       {res && (
         <div className="machine" style={{ marginTop: 18 }}>
           <div>
-            {res.svg && (
+            {(res.path || res.svg) && (
               <div className="panel" style={{ padding: 12, marginBottom: 14 }}>
-                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>BEND SHAPE — lights up as the machine runs</div>
-                <div className="diagram" ref={diagRef} dangerouslySetInnerHTML={{ __html: res.svg }} />
+                <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+                  <span className="muted" style={{ fontSize: 12 }}>BEND SHAPE{view3d ? " — drag to orbit" : " — lights up as it runs"}</span>
+                  <div className="seg">
+                    <button className={view3d ? "on" : ""} onClick={() => setView3d(true)} disabled={!res.path}>3D</button>
+                    <button className={!view3d ? "on" : ""} onClick={() => setView3d(false)} disabled={!res.svg}>2D</button>
+                  </div>
+                </div>
+                {view3d && res.path
+                  ? <Conduit3D verts={res.path.verts} angles={res.path.angles} />
+                  : <div className="diagram" ref={diagRef} dangerouslySetInnerHTML={{ __html: res.svg || "" }} />}
               </div>
             )}
             <div className="progress"><div style={{ width: `${pct}%` }} /></div>

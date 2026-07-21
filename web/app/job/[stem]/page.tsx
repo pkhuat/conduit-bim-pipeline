@@ -8,6 +8,12 @@ import {
   type JobDetail, type Run, type MachineResult, type Command, type TradeSize,
 } from "../../../lib/api";
 import { AXES, freshAxes, applyCmd } from "../../../lib/machine";
+import dynamic from "next/dynamic";
+
+const Conduit3D = dynamic(() => import("../../../components/Conduit3D"), {
+  ssr: false,
+  loading: () => <div className="empty" style={{ height: 380 }}>Loading 3-D viewer…</div>,
+});
 
 type Tab = "overview" | "runs" | "machine";
 
@@ -175,6 +181,7 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
   { run: Run; stem: string; sizes: TradeSize[]; refresh: () => Promise<void>; onBack: () => void; onSend: () => void }) {
   const [busy, setBusy] = useState(false);
   const [od, setOd] = useState("");
+  const [view3d, setView3d] = useState(true);
   const hasOdd = run.review.some((r) => r.startsWith("odd angle"));
   const hasUnknownSize = run.review.some((r) => r.startsWith("unknown size"));
 
@@ -242,16 +249,28 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
         )}
       </div>
 
-      {run.svg && (
+      {(run.path || run.svg) && (
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Run shape</h2>
-          <div className="diagram" dangerouslySetInnerHTML={{ __html: run.svg }} />
-          <div className="legend">
-            <span><i className="sw start" /> start / end</span>
-            <span><i className="sw bend" /> bend (angle labeled)</span>
-            <span><i className="sw stick" /> each color = one 10-ft stick</span>
-            <span><i className="sw cplr" /> coupler joint</span>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 12 }}>
+            <h2 style={{ margin: 0 }}>Run shape</h2>
+            <div className="seg">
+              <button className={view3d ? "on" : ""} onClick={() => setView3d(true)} disabled={!run.path}>3D</button>
+              <button className={!view3d ? "on" : ""} onClick={() => setView3d(false)} disabled={!run.svg}>2D</button>
+            </div>
           </div>
+          {view3d && run.path ? (
+            <Conduit3D verts={run.path.verts} angles={run.path.angles} />
+          ) : run.svg ? (
+            <>
+              <div className="diagram" dangerouslySetInnerHTML={{ __html: run.svg }} />
+              <div className="legend">
+                <span><i className="sw start" /> start / end</span>
+                <span><i className="sw bend" /> bend (angle labeled)</span>
+                <span><i className="sw stick" /> each color = one 10-ft stick</span>
+                <span><i className="sw cplr" /> coupler joint</span>
+              </div>
+            </>
+          ) : null}
         </div>
       )}
 

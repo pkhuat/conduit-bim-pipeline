@@ -477,9 +477,10 @@ def api_machine(stem):
                        "sticks": len(sticks)}}
 
 
-def _manual_diagram_svg(bends):
+def _manual_geometry(bends):
     """Build a 3-D centerline from a hand-entered bend program (feed straight, roll,
-    bend, repeat) and render it with the same isometric diagram the BIM runs use."""
+    bend, repeat). Returns (svg, path) — the 2-D isometric diagram and the 3-D
+    {verts, angles, cuts} for the interactive viewer."""
     import math
 
     def unit(v):
@@ -507,10 +508,11 @@ def _manual_diagram_svg(bends):
     p = tuple(p[i] + d[i] * 152.4 for i in range(3)); verts.append(p)   # tail so the end shows
     run = {"run": 0, "kind": "manual", "length_ft": 0, "verts": verts,
            "angles": angles, "cuts": [], "sticks": 1}
+    path = {"verts": [[round(c, 1) for c in v] for v in verts], "angles": angles, "cuts": []}
     try:
-        return process.bd.svg_for(run)
+        return process.bd.svg_for(run), path
     except Exception:
-        return None
+        return None, path
 
 
 @app.route("/api/machine/manual", methods=["POST", "OPTIONS"])
@@ -543,9 +545,10 @@ def api_machine_manual():
     commands = [{"board": bd, "cmd": c, "response": r} for (bd, c, r) in machine.history]
     final = {n: {"position": round(ax["position"], 2), "enabled": ax["enabled"]}
              for n, ax in machine.axes.items()}
+    svg, path = _manual_geometry(bends)
     return {"ok": True, "run": "manual", "sticks": [{"run": 0, "piece": 1, "bends": len(bends)}],
             "commands": commands, "truncated": False, "warnings": machine.warnings,
-            "final_state": final, "svg": _manual_diagram_svg(bends),
+            "final_state": final, "svg": svg, "path": path,
             "counts": {"commands": len(machine.history), "warnings": len(machine.warnings), "sticks": 1}}
 
 

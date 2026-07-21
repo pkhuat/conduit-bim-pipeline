@@ -12,10 +12,11 @@ export type Piece = {
   piece: number; load: string; end: string;
   length_ft: number; cut_length_ft: number; bends: Bend[]; tail_advance: number;
 };
+export type Path3D = { verts: number[][]; angles: number[]; cuts?: number[] };
 export type Run = {
   run: number; kind: string; od_mm: number | null; die: string;
   length_ft: number; n_bends: number; n_sticks: number;
-  review: string[]; svg: string | null; bends: Bend[]; pieces: Piece[];
+  review: string[]; svg: string | null; path: Path3D | null; bends: Bend[]; pieces: Piece[];
 };
 export type Stats = {
   conduit: string; conduits: number; bends: number; sticks: number;
@@ -34,7 +35,7 @@ export type MachineResult = {
   commands: Command[]; truncated: boolean; warnings: string[];
   final_state: Record<string, Axis>;
   counts: { commands: number; warnings: number; sticks: number };
-  svg?: string | null; error?: string;
+  svg?: string | null; path?: Path3D | null; error?: string;
 };
 
 async function j<T>(r: Response): Promise<T> {

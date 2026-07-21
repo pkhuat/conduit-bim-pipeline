@@ -120,6 +120,10 @@ def process_one(path, resolve_odd=False, resolve_runs=None, size_overrides=None)
     #    web app can show each run's shape inline), then the top-12 HTML page.
     fname, druns_all = bd.cleaned_runs(path, 10 ** 9)
     svg_by_run = {d["run"]: bd.svg_for(d) for d in druns_all}
+    # 3-D centerline per run (mm) for the interactive Three.js viewer
+    path_by_run = {d["run"]: {"verts": [[round(c, 1) for c in v] for v in d["verts"]],
+                              "angles": d["angles"], "cuts": [round(c, 1) for c in d["cuts"]]}
+                   for d in druns_all}
     html_path = os.path.join(OUTDIR, f"{stem}_diagrams.html")
     bd.write_html(html_path, fname, druns_all[:12])
     cards_path = os.path.join(OUTDIR, f"{stem}_cards.html")
@@ -189,6 +193,7 @@ def process_one(path, resolve_odd=False, resolve_runs=None, size_overrides=None)
             "n_sticks": len(r.get("pieces") or []),
             "review": issues_by_run.get(r["run"], []),
             "svg": svg_by_run.get(r["run"]),      # inline run-shape diagram (or null if straight)
+            "path": path_by_run.get(r["run"]),    # 3-D centerline {verts, angles, cuts} for the 3D viewer
             "bends": [{"advance": b.get("advance", b.get("feed")), "angle": b.get("angle"),
                        "rotate": b.get("rotate"), "roll_dir": b.get("roll_dir", 0)}
                       for b in r["bends"]],
