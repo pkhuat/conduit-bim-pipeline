@@ -34,7 +34,7 @@ export type MachineResult = {
   commands: Command[]; truncated: boolean; warnings: string[];
   final_state: Record<string, Axis>;
   counts: { commands: number; warnings: number; sticks: number };
-  error?: string;
+  svg?: string | null; error?: string;
 };
 
 async function j<T>(r: Response): Promise<T> {

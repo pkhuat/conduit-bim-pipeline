@@ -477,6 +477,42 @@ def api_machine(stem):
                        "sticks": len(sticks)}}
 
 
+def _manual_diagram_svg(bends):
+    """Build a 3-D centerline from a hand-entered bend program (feed straight, roll,
+    bend, repeat) and render it with the same isometric diagram the BIM runs use."""
+    import math
+
+    def unit(v):
+        n = math.sqrt(sum(x * x for x in v)) or 1.0
+        return (v[0] / n, v[1] / n, v[2] / n)
+
+    def cross(a, b):
+        return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+    def rot(v, axis, deg):                       # Rodrigues rotation
+        th = math.radians(deg); c = math.cos(th); s = math.sin(th); ax = unit(axis)
+        d = v[0] * ax[0] + v[1] * ax[1] + v[2] * ax[2]; cr = cross(ax, v)
+        return tuple(v[i] * c + cr[i] * s + ax[i] * d * (1 - c) for i in range(3))
+
+    p = (0.0, 0.0, 0.0); d = (1.0, 0.0, 0.0); m1 = (0.0, 0.0, 1.0); m2 = cross(d, m1)
+    verts = [p]; angles = []
+    for b in bends:
+        dist = b["advance"] or 152.4                  # a straight so consecutive bends read apart
+        p = tuple(p[i] + d[i] * dist for i in range(3)); verts.append(p)
+        roll = b["rotate"] * (b.get("roll_dir") or 0)
+        if roll:
+            m1 = rot(m1, d, roll); m2 = rot(m2, d, roll)
+        d = rot(d, m2, b["angle"]); m1 = rot(m1, m2, b["angle"])
+        angles.append(round(b["angle"], 1))
+    p = tuple(p[i] + d[i] * 152.4 for i in range(3)); verts.append(p)   # tail so the end shows
+    run = {"run": 0, "kind": "manual", "length_ft": 0, "verts": verts,
+           "angles": angles, "cuts": [], "sticks": 1}
+    try:
+        return process.bd.svg_for(run)
+    except Exception:
+        return None
+
+
 @app.route("/api/machine/manual", methods=["POST", "OPTIONS"])
 def api_machine_manual():
     """Drive the SIMULATOR from a hand-built bend program (no BIM model) — the
@@ -509,7 +545,7 @@ def api_machine_manual():
              for n, ax in machine.axes.items()}
     return {"ok": True, "run": "manual", "sticks": [{"run": 0, "piece": 1, "bends": len(bends)}],
             "commands": commands, "truncated": False, "warnings": machine.warnings,
-            "final_state": final,
+            "final_state": final, "svg": _manual_diagram_svg(bends),
             "counts": {"commands": len(machine.history), "warnings": len(machine.warnings), "sticks": 1}}
 
 

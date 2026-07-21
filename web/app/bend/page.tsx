@@ -21,6 +21,7 @@ export default function BendBuilder() {
   const [shown, setShown] = useState(0);
   const [paused, setPaused] = useState(false);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const diagRef = useRef<HTMLDivElement>(null);
 
   const run = useCallback(async () => {
     setPhase("loading"); setRes(null); setShown(0); setPaused(false);
@@ -44,6 +45,20 @@ export default function BendBuilder() {
   }, [phase, res, paused]);
 
   useEffect(() => { if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight; }, [shown]);
+
+  // light up the diagram's bends as the program plays
+  useEffect(() => {
+    const el = diagRef.current;
+    if (!el || !res) return;
+    const dots = el.querySelectorAll(".bd");
+    const n = dots.length;
+    if (!n) return;
+    const cur = Math.min(n - 1, Math.floor((res.commands.length ? shown / res.commands.length : 0) * n));
+    dots.forEach((d, i) => {
+      d.classList.toggle("done", phase === "done" || i < cur);
+      d.classList.toggle("active", phase === "run" && i === cur);
+    });
+  }, [shown, phase, res]);
 
   const axes = useMemo(() => {
     const ax = freshAxes();
@@ -125,6 +140,12 @@ export default function BendBuilder() {
       {res && (
         <div className="machine" style={{ marginTop: 18 }}>
           <div>
+            {res.svg && (
+              <div className="panel" style={{ padding: 12, marginBottom: 14 }}>
+                <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>BEND SHAPE — lights up as the machine runs</div>
+                <div className="diagram" ref={diagRef} dangerouslySetInnerHTML={{ __html: res.svg }} />
+              </div>
+            )}
             <div className="progress"><div style={{ width: `${pct}%` }} /></div>
             <div className="row" style={{ justifyContent: "space-between", fontSize: 12.5 }}>
               <span className="muted">{shown} / {total} commands</span>
