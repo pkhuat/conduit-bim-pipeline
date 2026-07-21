@@ -451,6 +451,28 @@ def test_port_based_file_still_uses_ports_not_fallback():
     assert len(rows) == 1 and rows[0]["bends"], "port-based reconstruction regressed"
 
 
+def test_run_rows_isolates_a_bad_run():
+    """One run that blows up mid-processing is skipped and counted (info['n_errors']),
+    never allowed to crash the whole job — real models have the odd degenerate run."""
+    path = os.path.join(HERE, "samples", "sample_elec.ifc")
+    if not os.path.exists(path):
+        return
+    orig = ec.split_into_pieces
+    calls = {"n": 0}
+    def boom(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 3:                 # detonate exactly one run
+            raise RuntimeError("synthetic bad run")
+        return orig(*a, **k)
+    ec.split_into_pieces = boom
+    try:
+        info, rows = br.run_rows(path)
+    finally:
+        ec.split_into_pieces = orig
+    assert info["n_errors"] >= 1, "the bad run should be counted, not raised"
+    assert len(rows) > 100, "every other run should still process"
+
+
 def test_calibration_converters_and_springback():
     import calibration as cal
     assert cal.CALIBRATED is False                        # honest: not yet calibrated

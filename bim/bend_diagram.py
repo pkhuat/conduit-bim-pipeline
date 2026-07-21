@@ -209,9 +209,10 @@ def svg_for(run):
         cx, cy = to_screen(cp)
         parts.append(f'<circle cx="{cx:.1f}" cy="{cy:.1f}" r="3.8" fill="#ffffff" '
                      f'stroke="#2d3748" stroke-width="1.6"/>')
-    # bend dots, then labels on top (so the halo never sits under a dot)
-    for x, y, lx, ly, ang in labels:
-        parts.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="#e53e3e"/>')
+    # bend dots, then labels on top (so the halo never sits under a dot). Each dot
+    # is tagged (class + index) so the machine view can light bends up as it runs.
+    for j, (x, y, lx, ly, ang) in enumerate(labels):
+        parts.append(f'<circle class="bd" data-i="{j}" cx="{x:.1f}" cy="{y:.1f}" r="4" fill="#e53e3e"/>')
     for x, y, lx, ly, ang in labels:
         parts.append(_label(lx, ly, f"{ang:g}&#176;", "#1a202c"))
     # start / end

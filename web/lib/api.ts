@@ -48,11 +48,11 @@ export const getJobs = () =>
 export const getJob = (stem: string) =>
   fetch(`${API}/api/jobs/${stem}`, { cache: "no-store" }).then(j<JobDetail>);
 
-export const runMachine = (stem: string, run: number | "all") =>
+export const runMachine = (stem: string, run: number | "all" | number[]) =>
   fetch(`${API}/api/jobs/${stem}/machine`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ run }),
+    body: JSON.stringify(Array.isArray(run) ? { runs: run } : { run }),
   }).then(j<MachineResult>);
 
 export const resolveRun = (stem: string, run: number) =>

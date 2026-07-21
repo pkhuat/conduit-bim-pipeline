@@ -59,35 +59,44 @@ def run_rows(path, resolve_odd=False, resolve_runs=None, size_overrides=None):
     runs = ec.reconstruct_runs(model, segs, fits, scale=scale)
 
     rows = []
+    n_errors = 0
     for i, (poly, run_segs) in enumerate(runs, 1):
-        clean = ec.drop_near_straight(ec.simplify_polyline(poly, ec.SIMPLIFY_TOL), ec.MIN_BEND_DEG)
-        bends, lengths, tail = ec.derive_bends(clean)
-        force = resolve_odd or (i in resolve_runs)
-        for b in bends:
-            b["angle"] = round(ec.snap_to_trade(b["angle"], force=force), 1)
-            b["rotate"] = round(ec.snap_roll(b["rotate"]), 1)
-        seg = run_segs[0] if run_segs else None
-        if i in size_overrides:
-            od_mm = size_overrides[i]
-        else:
-            od = ec.outer_diameter(seg) if seg else None
-            od_mm = round(od * scale, 1) if od else None
-        pieces, warns = ec.split_into_pieces(bends, tail,
-                                             radius_mm=ec.bend_radius_mm(od_mm))
-        rows.append({
-            "run": i,
-            "kind": short_kind(ec.conduit_kind(seg)) if seg else "?",
-            "od_mm": od_mm,
-            "length_mm": round(ec.path_length(clean), 1),
-            "bends": bends,
-            "tail_mm": round(tail, 1),
-            "pieces": pieces,
-            "piece_warnings": warns,
-        })
+        # Isolate each run: a single malformed run in a real model (degenerate
+        # geometry, an unreadable segment) is skipped and counted, never allowed to
+        # crash the whole job.
+        try:
+            clean = ec.drop_near_straight(ec.simplify_polyline(poly, ec.SIMPLIFY_TOL), ec.MIN_BEND_DEG)
+            bends, lengths, tail = ec.derive_bends(clean)
+            force = resolve_odd or (i in resolve_runs)
+            for b in bends:
+                b["angle"] = round(ec.snap_to_trade(b["angle"], force=force), 1)
+                b["rotate"] = round(ec.snap_roll(b["rotate"]), 1)
+            seg = run_segs[0] if run_segs else None
+            if i in size_overrides:
+                od_mm = size_overrides[i]
+            else:
+                od = ec.outer_diameter(seg) if seg else None
+                od_mm = round(od * scale, 1) if od else None
+            pieces, warns = ec.split_into_pieces(bends, tail,
+                                                 radius_mm=ec.bend_radius_mm(od_mm))
+            rows.append({
+                "run": i,
+                "kind": short_kind(ec.conduit_kind(seg)) if seg else "?",
+                "od_mm": od_mm,
+                "length_mm": round(ec.path_length(clean), 1),
+                "bends": bends,
+                "tail_mm": round(tail, 1),
+                "pieces": pieces,
+                "piece_warnings": warns,
+            })
+        except Exception:
+            n_errors += 1
+            continue
     info = {
         "file": os.path.basename(path),
         "schema": model.schema,
         "n_segments": len(segs),
+        "n_errors": n_errors,
         "n_trays": n_trays,
         "n_runs": len(rows),
         "n_bent": sum(1 for r in rows if r["bends"]),

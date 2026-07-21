@@ -113,6 +113,9 @@ h2 { color: var(--navy); font-size: 16px; margin: 22px 0 12px; }
 .detail { display: grid; grid-template-columns: 1fr; gap: 14px; }
 .diagram { background: #fbfbfd; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
 .diagram svg { display: block; width: 100%; height: auto; max-width: 620px; margin: 0 auto; }
+.diagram .bd { transition: fill .12s ease; }
+.diagram .bd.done { fill: #2f855a; }
+.diagram .bd.active { fill: #dd6b20; stroke: #dd6b20; stroke-opacity: .3; stroke-width: 7; }
 .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .legend .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
@@ -148,5 +151,17 @@ h2 { color: var(--navy); font-size: 16px; margin: 22px 0 12px; }
 
 .muted { color: var(--muted); }
 .empty { text-align: center; color: var(--muted); padding: 40px 20px; }
+
+/* ---- print: the per-run job traveler ---- */
+@media print {
+  .topbar, .tabs, .crumbs, .toolbar, .seg, .noprint, .console, .btn, select, input { display: none !important; }
+  body { background: #fff; }
+  .wrap { max-width: none; padding: 0; }
+  .detail { gap: 10px; }
+  .panel, .tbl { border: 1px solid #bbb !important; box-shadow: none !important; break-inside: avoid; }
+  .banner { border: 1px solid #bbb !important; background: #fff !important; color: #000 !important; }
+  h1 { font-size: 20px; }
+  a[href]::after { content: ""; }
+}
 .spin { display: inline-block; width: 15px; height: 15px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: sp .7s linear infinite; }
 @keyframes sp { to { transform: rotate(360deg); } }

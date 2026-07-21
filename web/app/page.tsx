@@ -78,6 +78,7 @@ export default function Home() {
       ) : jobs.length === 0 ? (
         <div className="panel empty">No jobs yet — process a model above to get started.</div>
       ) : (
+        <div style={{ overflowX: "auto" }}>
         <table className="tbl">
           <thead>
             <tr><th>Job</th><th>Conduit</th><th className="num">Runs</th><th className="num">Bends</th><th>Status</th></tr>
@@ -96,6 +97,7 @@ export default function Home() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </main>
   );

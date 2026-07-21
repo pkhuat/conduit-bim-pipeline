@@ -32,7 +32,7 @@ export default function Workspace() {
   const [job, setJob] = useState<JobDetail | null>(null);
   const [err, setErr] = useState("");
   const [tab, setTab] = useState<Tab>("overview");
-  const [machineTarget, setMachineTarget] = useState<number | null>(null);
+  const [machineTarget, setMachineTarget] = useState<number | number[] | null>(null);
   const [sizes, setSizes] = useState<TradeSize[]>([]);
 
   useEffect(() => { getTradeSizes().then((d) => setSizes(d.sizes)).catch(() => {}); }, []);
@@ -60,7 +60,9 @@ export default function Workspace() {
       </div>
 
       {tab === "overview" && <Overview job={job} />}
-      {tab === "runs" && <Runs job={job} stem={stem} sizes={sizes} refresh={refresh} onSend={(r) => { setMachineTarget(r); setTab("machine"); }} />}
+      {tab === "runs" && <Runs job={job} stem={stem} sizes={sizes} refresh={refresh}
+        onSend={(r) => { setMachineTarget(r); setTab("machine"); }}
+        onQueue={(list) => { setMachineTarget(list); setTab("machine"); }} />}
       {tab === "machine" && <Machine job={job} target={machineTarget} />}
     </main>
   );
@@ -108,11 +110,13 @@ function Overview({ job }: { job: JobDetail }) {
 }
 
 /* ---------------- Runs ---------------- */
-function Runs({ job, stem, sizes, refresh, onSend }:
-  { job: JobDetail; stem: string; sizes: TradeSize[]; refresh: () => Promise<void>; onSend: (run: number) => void }) {
+function Runs({ job, stem, sizes, refresh, onSend, onQueue }:
+  { job: JobDetail; stem: string; sizes: TradeSize[]; refresh: () => Promise<void>;
+    onSend: (run: number) => void; onQueue: (runs: number[]) => void }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<"all" | "review" | "bent">("all");
   const [openNo, setOpenNo] = useState<number | null>(null);
+  const [sel, setSel] = useState<Set<number>>(new Set());
   const open = openNo != null ? job.runs.find((r) => r.run === openNo) ?? null : null;
 
   const rows = useMemo(() => job.runs.filter((r) => {
@@ -121,6 +125,11 @@ function Runs({ job, stem, sizes, refresh, onSend }:
     if (q && !(`${r.run} ${r.kind}`.toLowerCase().includes(q.toLowerCase()))) return false;
     return true;
   }), [job.runs, q, filter]);
+
+  const bentRows = rows.filter((r) => r.n_bends > 0);
+  const toggle = (n: number) => setSel((s) => { const x = new Set(s); x.has(n) ? x.delete(n) : x.add(n); return x; });
+  const allBentSelected = bentRows.length > 0 && bentRows.every((r) => sel.has(r.run));
+  const toggleAll = () => setSel(allBentSelected ? new Set() : new Set(bentRows.map((r) => r.run)));
 
   if (open) return <RunDetail run={open} stem={stem} sizes={sizes} refresh={refresh}
     onBack={() => setOpenNo(null)} onSend={() => onSend(open.run)} />;
@@ -137,26 +146,43 @@ function Runs({ job, stem, sizes, refresh, onSend }:
           ))}
         </div>
       </div>
-      <table className="tbl">
-        <thead>
-          <tr><th>Run</th><th>Conduit</th><th className="num">Length (ft)</th><th className="num">Bends</th><th className="num">Sticks</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.run} className="click" onClick={() => setOpenNo(r.run)}>
-              <td><b style={{ color: "var(--navy)" }}>#{r.run}</b></td>
-              <td>{r.kind}{r.die ? <span className="muted"> · {r.die}</span> : null}</td>
-              <td className="num">{r.length_ft}</td>
-              <td className="num">{r.n_bends}</td>
-              <td className="num">{r.n_sticks}</td>
-              <td>{r.review.length
-                ? <span className="badge warn">review</span>
-                : r.n_bends ? <span className="badge ok">ready</span> : <span className="badge mut">straight</span>}</td>
+      {sel.size > 0 && (
+        <div className="banner ok" style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}>
+          <span><b>{sel.size} run{sel.size > 1 ? "s" : ""} selected</b> for the machine queue.</span>
+          <span className="row">
+            <button className="btn green sm" onClick={() => { onQueue([...sel].sort((a, b) => a - b)); }}>▶ Run {sel.size} on machine</button>
+            <button className="btn ghost sm" onClick={() => setSel(new Set())}>Clear</button>
+          </span>
+        </div>
+      )}
+      <div style={{ overflowX: "auto" }}>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th style={{ width: 34 }}><input type="checkbox" checked={allBentSelected} onChange={toggleAll} aria-label="Select all bent runs" /></th>
+              <th>Run</th><th>Conduit</th><th className="num">Length (ft)</th><th className="num">Bends</th><th className="num">Sticks</th><th>Status</th>
             </tr>
-          ))}
-          {rows.length === 0 && <tr><td colSpan={6} className="empty">No runs match.</td></tr>}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.run} className="click" onClick={() => setOpenNo(r.run)}>
+                <td onClick={(e) => e.stopPropagation()}>
+                  {r.n_bends > 0 && <input type="checkbox" checked={sel.has(r.run)} onChange={() => toggle(r.run)} aria-label={`Select run ${r.run}`} />}
+                </td>
+                <td><b style={{ color: "var(--navy)" }}>#{r.run}</b></td>
+                <td>{r.kind}{r.die ? <span className="muted"> · {r.die}</span> : null}</td>
+                <td className="num">{r.length_ft}</td>
+                <td className="num">{r.n_bends}</td>
+                <td className="num">{r.n_sticks}</td>
+                <td>{r.review.length
+                  ? <span className="badge warn">review</span>
+                  : r.n_bends ? <span className="badge ok">ready</span> : <span className="badge mut">straight</span>}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={7} className="empty">No runs match.</td></tr>}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }
@@ -185,9 +211,12 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
 
   return (
     <div className="detail">
-      <div className="row" style={{ justifyContent: "space-between" }}>
+      <div className="row noprint" style={{ justifyContent: "space-between" }}>
         <button className="btn ghost sm" onClick={onBack}>← All runs</button>
-        <button className="btn green sm" disabled={run.n_bends === 0} onClick={onSend}>Send to machine →</button>
+        <span className="row">
+          <button className="btn ghost sm" onClick={() => window.print()}>🖨 Print traveler</button>
+          <button className="btn green sm" disabled={run.n_bends === 0} onClick={onSend}>Send to machine →</button>
+        </span>
       </div>
       <div className="panel">
         <h2 style={{ marginTop: 0 }}>Run #{run.run}</h2>
@@ -245,17 +274,39 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
       {run.n_bends > 0 && (
         <div className="panel">
           <h2 style={{ marginTop: 0 }}>Sticks</h2>
-          <table className="tbl">
-            <thead><tr><th>Stick</th><th>Load</th><th>End</th><th className="num">Cut (ft)</th><th className="num">Bends</th></tr></thead>
-            <tbody>
-              {run.pieces.map((p) => (
-                <tr key={p.piece}>
-                  <td>#{p.piece}</td><td className="muted">{p.load}</td><td className="muted">{p.end}</td>
-                  <td className="num">{p.cut_length_ft}</td><td className="num">{p.bends.length}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl">
+              <thead><tr><th>Stick</th><th>Load</th><th>End</th><th className="num">Cut (ft)</th><th className="num">Bends</th></tr></thead>
+              <tbody>
+                {run.pieces.map((p) => (
+                  <tr key={p.piece}>
+                    <td>#{p.piece}</td><td className="muted">{p.load}</td><td className="muted">{p.end}</td>
+                    <td className="num">{p.cut_length_ft}</td><td className="num">{p.bends.length}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {run.bends.length > 0 && (
+        <div className="panel">
+          <h2 style={{ marginTop: 0 }}>Bends</h2>
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl">
+              <thead><tr><th>#</th><th className="num">Angle</th><th className="num">Roll</th></tr></thead>
+              <tbody>
+                {run.bends.map((b, i) => (
+                  <tr key={i}>
+                    <td>{i + 1}</td>
+                    <td className="num">{b.angle}°</td>
+                    <td className="num">{b.rotate ? `${b.rotate}° ${b.roll_dir > 0 ? "CW" : b.roll_dir < 0 ? "CCW" : ""}` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -263,27 +314,35 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
 }
 
 /* ---------------- Machine ---------------- */
-function Machine({ job, target }: { job: JobDetail; target: number | null }) {
+type Sel = number | "all" | number[];
+function Machine({ job, target }: { job: JobDetail; target: number | number[] | null }) {
   const bent = useMemo(() => job.runs.filter((r) => r.n_bends > 0), [job.runs]);
-  const [sel, setSel] = useState<number | "all">(() => target ?? bent[0]?.run ?? "all");
+  const [sel, setSel] = useState<Sel>(() => target ?? bent[0]?.run ?? "all");
   const [phase, setPhase] = useState<"idle" | "loading" | "run" | "done">("idle");
   const [res, setRes] = useState<MachineResult | null>(null);
   const [shown, setShown] = useState(0);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
   const consoleRef = useRef<HTMLDivElement>(null);
+  const diagRef = useRef<HTMLDivElement>(null);
 
-  // pick up a run handed over from the Runs tab ("Send to machine")
-  useEffect(() => { if (target != null) setSel(target); }, [target]);
-
-  const start = useCallback(async () => {
+  const startWith = useCallback(async (selection: Sel) => {
     setPhase("loading"); setRes(null); setShown(0); setPaused(false);
     try {
-      const r = await runMachine(job.stem, sel);
+      const r = await runMachine(job.stem, selection);
       if (!r.ok) { setPhase("idle"); alert(r.error || "Machine run failed"); return; }
       setRes(r); setShown(0); setPhase("run");
     } catch { setPhase("idle"); alert("Couldn't reach the API."); }
-  }, [job.stem, sel]);
+  }, [job.stem]);
+  const start = () => startWith(sel);
+
+  // pick up a hand-off from the Runs tab: a single "Send to machine" preselects;
+  // a queue ("Run N on machine") preselects AND starts.
+  useEffect(() => {
+    if (target == null) return;
+    setSel(target);
+    if (Array.isArray(target)) startWith(target);
+  }, [target, startWith]);
 
   const step = useCallback(() => {
     if (!res) return;
@@ -325,6 +384,21 @@ function Machine({ job, target }: { job: JobDetail; target: number | null }) {
   const total = res?.commands.length ?? 0;
   const pct = total ? Math.round((shown / total) * 100) : 0;
   const tail = res ? res.commands.slice(Math.max(0, shown - 220), shown) : [];
+  const curRun = typeof sel === "number" ? job.runs.find((r) => r.run === sel) ?? null : null;
+
+  // light up the diagram's bends as the run plays (rough sync by progress fraction)
+  useEffect(() => {
+    const el = diagRef.current;
+    if (!el) return;
+    const dots = el.querySelectorAll(".bd");
+    const n = dots.length;
+    if (!n) return;
+    const cur = Math.min(n - 1, Math.floor((total ? shown / total : 0) * n));
+    dots.forEach((d, i) => {
+      d.classList.toggle("done", phase === "done" || i < cur);
+      d.classList.toggle("active", phase === "run" && i === cur);
+    });
+  }, [shown, total, phase, curRun]);
 
   return (
     <div className="machine">
@@ -332,11 +406,18 @@ function Machine({ job, target }: { job: JobDetail; target: number | null }) {
         <div className="panel">
           <div className="row" style={{ gap: 10 }}>
             <label className="muted" style={{ fontSize: 13 }}>Run</label>
-            <select value={String(sel)} onChange={(e) => setSel(e.target.value === "all" ? "all" : Number(e.target.value))}
-              style={{ padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 14, flex: 1 }}>
-              {bent.map((r) => <option key={r.run} value={r.run}>Run #{r.run} — {r.kind}, {r.n_bends} bends</option>)}
-              <option value="all">Whole building — every bent run</option>
-            </select>
+            {Array.isArray(sel) ? (
+              <div style={{ flex: 1, display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
+                <span><b>Queue:</b> {sel.length} runs (#{sel.slice(0, 6).join(", #")}{sel.length > 6 ? "…" : ""})</span>
+                <button className="btn ghost sm" onClick={() => setSel(bent[0]?.run ?? "all")}>change</button>
+              </div>
+            ) : (
+              <select value={String(sel)} onChange={(e) => setSel(e.target.value === "all" ? "all" : Number(e.target.value))}
+                style={{ padding: "8px 10px", borderRadius: 9, border: "1px solid var(--line)", fontSize: 14, flex: 1 }}>
+                {bent.map((r) => <option key={r.run} value={r.run}>Run #{r.run} — {r.kind}, {r.n_bends} bends</option>)}
+                <option value="all">Whole building — every bent run</option>
+              </select>
+            )}
             <button className="btn green" onClick={start} disabled={phase === "loading" || phase === "run"}>
               {phase === "loading" ? <><span className="spin" /> Loading…</> : phase === "run" ? <><span className="spin" /> Running…</> : "▶ Run machine"}
             </button>
@@ -379,6 +460,15 @@ function Machine({ job, target }: { job: JobDetail; target: number | null }) {
             </div>
           ))}
         </div>
+
+        {curRun?.svg && (
+          <div className="panel" style={{ marginTop: 14, padding: 12 }}>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+              RUN #{curRun.run} — bends light up as the machine reaches them
+            </div>
+            <div className="diagram" ref={diagRef} dangerouslySetInnerHTML={{ __html: curRun.svg }} />
+          </div>
+        )}
 
         {phase === "done" && res && (
           <div className={`banner ${res.warnings.length ? "warn" : "ok"}`} style={{ marginTop: 14 }}>

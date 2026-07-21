@@ -433,16 +433,27 @@ def api_machine(stem):
         return {"ok": False, "error": "Job not found."}, 404
 
     body = request.get_json(silent=True) or {}
-    which = body.get("run", "all")
-    runs = rj["runs"]
-    if which != "all":
+    all_runs = rj["runs"]
+    if isinstance(body.get("runs"), list) and body["runs"]:
         try:
-            which = int(which)
+            want = {int(x) for x in body["runs"]}
         except (TypeError, ValueError):
-            return {"ok": False, "error": "Bad run number."}, 400
-        runs = [r for r in runs if r["run"] == which]
+            return {"ok": False, "error": "Bad run list."}, 400
+        runs = [r for r in all_runs if r["run"] in want]
+        which = sorted(want)
         if not runs:
-            return {"ok": False, "error": f"Run {which} not found."}, 404
+            return {"ok": False, "error": "No matching runs."}, 404
+    else:
+        which = body.get("run", "all")
+        runs = all_runs
+        if which != "all":
+            try:
+                which = int(which)
+            except (TypeError, ValueError):
+                return {"ok": False, "error": "Bad run number."}, 400
+            runs = [r for r in all_runs if r["run"] == which]
+            if not runs:
+                return {"ok": False, "error": f"Run {which} not found."}, 404
 
     machine = SimMachine(verbose=False)
     sticks = []
