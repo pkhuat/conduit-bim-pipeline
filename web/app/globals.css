@@ -65,19 +65,19 @@ a { color: inherit; }
 /* ---- app shell ---- */
 .topbar {
   position: sticky; top: 0; z-index: 30;
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: saturate(1.4) blur(10px);
-  border-bottom: 1px solid var(--border);
+  background: #232e2e;                 /* Tubender charcoal — brand bar in both themes */
+  border-bottom: 1px solid #10adb51f;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .25);
 }
-.topbar .inner { max-width: 1140px; margin: 0 auto; padding: 0 24px; height: 60px; display: flex; align-items: center; gap: 20px; }
-.brand { display: inline-flex; align-items: center; gap: 9px; font-weight: 700; font-size: 16px; letter-spacing: -.01em; color: var(--ink); text-decoration: none; }
-.brand svg, .brand img { width: 26px; height: 26px; display: block; }
+.topbar .inner { max-width: 1140px; margin: 0 auto; padding: 0 24px; height: 60px; display: flex; align-items: center; gap: 22px; }
+.brand { display: inline-flex; align-items: center; text-decoration: none; }
+.brand .wordmark { height: 21px; width: auto; display: block; }
 .topbar nav { display: flex; gap: 2px; }
-.topbar nav a { padding: 8px 13px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--ink-2); text-decoration: none; transition: .12s; white-space: nowrap; }
-.topbar nav a:hover { background: var(--sunken); color: var(--ink); }
+.topbar nav a { padding: 8px 13px; border-radius: 8px; font-size: 14px; font-weight: 500; color: #b7c4c2; text-decoration: none; transition: .12s; white-space: nowrap; }
+.topbar nav a:hover { background: rgba(255, 255, 255, .09); color: #fff; }
 .spacer { flex: 1; }
-.env { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-data); font-size: 12px; letter-spacing: .03em; color: var(--muted); white-space: nowrap; }
-.dotlive { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent); }
+.env { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-data); font-size: 12px; letter-spacing: .03em; color: #8ba09c; white-space: nowrap; }
+.dotlive { width: 7px; height: 7px; border-radius: 50%; background: #00c2cb; box-shadow: 0 0 0 3px rgba(0, 194, 203, .25); }
 @media (prefers-reduced-motion: no-preference) { .dotlive { animation: pulse 2.4s ease-in-out infinite; } }
 @keyframes pulse { 50% { opacity: .4; } }
 
