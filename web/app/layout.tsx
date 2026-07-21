@@ -21,7 +21,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <header className="topbar">
           <div className="inner">
-            <Link href="/" className="brand"><span className="mark" aria-hidden="true" />Tubender</Link>
+            <Link href="/" className="brand">
+              <img src="/tubender-mark.svg" alt="" width={26} height={26} aria-hidden="true" />Tubender
+            </Link>
             <nav>
               <Link href="/">Jobs</Link>
               <Link href="/bend">New bend</Link>
