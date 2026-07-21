@@ -60,7 +60,11 @@ export default function Home() {
         onDragLeave={() => setDrag(false)}
         onDrop={onDrop}
       >
-        <div style={{ fontSize: 38 }}>📁</div>
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="var(--accent)"
+          strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}>
+          <path d="M12 15V3m0 0L8 7m4-4l4 4" />
+          <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" />
+        </svg>
         <div><b>Drag &amp; drop</b> a <b>.ifc</b> here, or <b>click to browse</b></div>
         <div className="sub" style={{ marginTop: 6 }}>{file ? file.name : "no file chosen"}</div>
         <input ref={inputRef} type="file" accept=".ifc" hidden

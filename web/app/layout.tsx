@@ -1,6 +1,14 @@
 import "./globals.css";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+
+const sans = IBM_Plex_Sans({
+  subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-sans", display: "swap",
+});
+const mono = IBM_Plex_Mono({
+  subsets: ["latin"], weight: ["400", "500", "600"], variable: "--font-mono", display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Tubender — Conduit Fabrication",
@@ -9,17 +17,17 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body>
         <header className="topbar">
           <div className="inner">
-            <Link href="/" className="brand"><span className="dot" />Tubender</Link>
+            <Link href="/" className="brand"><span className="mark" aria-hidden="true" />Tubender</Link>
             <nav>
               <Link href="/">Jobs</Link>
               <Link href="/bend">New bend</Link>
             </nav>
             <span className="spacer" />
-            <span className="env">Fabrication Console</span>
+            <span className="env"><span className="dotlive" aria-hidden="true" />Fabrication Console</span>
           </div>
         </header>
         {children}
