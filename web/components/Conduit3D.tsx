@@ -51,12 +51,21 @@ function Scene({ verts, angles }: Path3D) {
         <mesh geometry={tube}>
           <meshStandardMaterial color="#00c2cb" metalness={0.35} roughness={0.35} />
         </mesh>
-        {/* start / end */}
+        {/* start / end, labeled */}
         {[points[0], points[points.length - 1]].map((p, i) => (
-          <mesh key={i} position={[p.x, p.y, p.z]}>
-            <sphereGeometry args={[0.26, 18, 18]} />
-            <meshStandardMaterial color="#2f9e63" emissive="#154" emissiveIntensity={0.3} />
-          </mesh>
+          <group key={i} position={[p.x, p.y, p.z]}>
+            <mesh>
+              <sphereGeometry args={[0.26, 18, 18]} />
+              <meshStandardMaterial color="#2f9e63" emissive="#154" emissiveIntensity={0.3} />
+            </mesh>
+            <Html center distanceFactor={11} zIndexRange={[50, 0]} style={{ pointerEvents: "none" }}>
+              <span style={{
+                display: "inline-block", transform: "translateY(-150%)",
+                color: "#7ee6a3", fontSize: 12, fontWeight: 600, letterSpacing: ".03em",
+                fontFamily: "var(--font-mono, monospace)", textShadow: "0 1px 4px #000, 0 0 4px #000",
+              }}>{i === 0 ? "START" : "END"}</span>
+            </Html>
+          </group>
         ))}
         {/* bend markers — label only the hovered one, so the shape stays clean */}
         {bends.map((p, i) => (

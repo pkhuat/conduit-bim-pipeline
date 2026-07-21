@@ -327,7 +327,6 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
   const consoleRef = useRef<HTMLDivElement>(null);
-  const diagRef = useRef<HTMLDivElement>(null);
 
   const startWith = useCallback(async (selection: Sel) => {
     setPhase("loading"); setRes(null); setShown(0); setPaused(false);
@@ -387,21 +386,6 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
   const total = res?.commands.length ?? 0;
   const pct = total ? Math.round((shown / total) * 100) : 0;
   const tail = res ? res.commands.slice(Math.max(0, shown - 220), shown) : [];
-  const curRun = typeof sel === "number" ? job.runs.find((r) => r.run === sel) ?? null : null;
-
-  // light up the diagram's bends as the run plays (rough sync by progress fraction)
-  useEffect(() => {
-    const el = diagRef.current;
-    if (!el) return;
-    const dots = el.querySelectorAll(".bd");
-    const n = dots.length;
-    if (!n) return;
-    const cur = Math.min(n - 1, Math.floor((total ? shown / total : 0) * n));
-    dots.forEach((d, i) => {
-      d.classList.toggle("done", phase === "done" || i < cur);
-      d.classList.toggle("active", phase === "run" && i === cur);
-    });
-  }, [shown, total, phase, curRun]);
 
   return (
     <div className="machine">
@@ -463,15 +447,6 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
             </div>
           ))}
         </div>
-
-        {curRun?.svg && (
-          <div className="panel" style={{ marginTop: 14, padding: 12 }}>
-            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-              RUN #{curRun.run} — bends light up as the machine reaches them
-            </div>
-            <div className="diagram" ref={diagRef} dangerouslySetInnerHTML={{ __html: curRun.svg }} />
-          </div>
-        )}
 
         {phase === "done" && res && (
           <div className={`banner ${res.warnings.length ? "warn" : "ok"}`} style={{ marginTop: 14 }}>
