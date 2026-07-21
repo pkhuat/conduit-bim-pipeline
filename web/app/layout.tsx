@@ -16,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/" className="brand"><span className="dot" />Tubender</Link>
             <nav>
               <Link href="/">Jobs</Link>
+              <Link href="/bend">New bend</Link>
             </nav>
             <span className="spacer" />
             <span className="env">Fabrication Console</span>

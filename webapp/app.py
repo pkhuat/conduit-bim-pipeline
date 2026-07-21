@@ -477,6 +477,42 @@ def api_machine(stem):
                        "sticks": len(sticks)}}
 
 
+@app.route("/api/machine/manual", methods=["POST", "OPTIONS"])
+def api_machine_manual():
+    """Drive the SIMULATOR from a hand-built bend program (no BIM model) — the
+    'create a bend from scratch' bender. Body: {bends: [{angle, roll, distance}]},
+    1–4 bends, angle 0–90°, distance in inches (feed before that bend)."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if not _SIM_OK:
+        return {"ok": False, "error": "Machine simulator unavailable on this server."}, 503
+    body = request.get_json(silent=True) or {}
+    raw = body.get("bends")
+    if not isinstance(raw, list) or not (1 <= len(raw) <= 4):
+        return {"ok": False, "error": "Provide 1 to 4 bends."}, 400
+    bends = []
+    for b in raw:
+        try:
+            angle = float(b.get("angle"))
+            roll = float(b.get("roll") or 0)
+            dist_in = float(b.get("distance") or 0)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Each bend needs a numeric angle."}, 400
+        if not (0 <= angle <= 90):
+            return {"ok": False, "error": "Each bend angle must be between 0 and 90°."}, 400
+        bends.append({"advance": round(dist_in * 25.4, 1), "angle": angle,
+                      "rotate": abs(roll), "roll_dir": 1 if roll > 0 else -1 if roll < 0 else 0})
+    machine = SimMachine(verbose=False)
+    _driver.run_stick(machine, bends, "manual bend program", verbose=False)
+    commands = [{"board": bd, "cmd": c, "response": r} for (bd, c, r) in machine.history]
+    final = {n: {"position": round(ax["position"], 2), "enabled": ax["enabled"]}
+             for n, ax in machine.axes.items()}
+    return {"ok": True, "run": "manual", "sticks": [{"run": 0, "piece": 1, "bends": len(bends)}],
+            "commands": commands, "truncated": False, "warnings": machine.warnings,
+            "final_state": final,
+            "counts": {"commands": len(machine.history), "warnings": len(machine.warnings), "sticks": 1}}
+
+
 def _overrides_path(stem):
     return os.path.join(UPLOADS, f"{stem}.overrides.json")   # lives outside OUT's cleanup
 

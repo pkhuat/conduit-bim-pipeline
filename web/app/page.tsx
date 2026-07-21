@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { API, getJobs, type Job } from "../lib/api";
 
 export default function Home() {
@@ -44,8 +45,13 @@ export default function Home() {
 
   return (
     <main className="wrap">
-      <h1>Conduit Fabrication</h1>
-      <p className="sub">Turn a Revit / BIM <b>.ifc</b> model into a machine-ready fabrication package — then run it on the machine.</p>
+      <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1>Conduit Fabrication</h1>
+          <p className="sub">Turn a Revit / BIM <b>.ifc</b> model into a machine-ready fabrication package — then run it on the machine.</p>
+        </div>
+        <Link className="btn ghost" href="/bend">+ Create a bend by hand</Link>
+      </div>
 
       <div
         className={`drop ${drag ? "hi" : ""}`}

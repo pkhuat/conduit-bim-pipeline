@@ -7,25 +7,9 @@ import {
   fileUrl, getJob, runMachine, resolveRun, setSize, getTradeSizes,
   type JobDetail, type Run, type MachineResult, type Command, type TradeSize,
 } from "../../../lib/api";
+import { AXES, freshAxes, applyCmd } from "../../../lib/machine";
 
 type Tab = "overview" | "runs" | "machine";
-type AxisMap = Record<string, { position: number; enabled: boolean }>;
-const AXES = ["ADVANCE", "ROTATE", "BEND", "SQUEEZE"];
-
-const freshAxes = (): AxisMap =>
-  Object.fromEntries(AXES.map((a) => [a, { position: 0, enabled: false }]));
-
-function applyCmd(ax: AxisMap, cmd: string) {
-  const [sub, act, val] = cmd.split(" ");
-  const a = ax[sub];
-  if (!a) return;
-  if (act === "ENABLE") a.enabled = true;
-  else if (act === "DISABLE") a.enabled = false;
-  else if (act === "TO") a.position = parseFloat(val) || 0;
-  else if (act === "BY") a.position += parseFloat(val) || 0;
-  else if (act === "CLOSE") a.position += 5000;
-  else if (act === "OPEN") a.position -= 5000;
-}
 
 export default function Workspace() {
   const stem = String(useParams().stem);

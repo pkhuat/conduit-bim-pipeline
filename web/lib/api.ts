@@ -74,4 +74,12 @@ export const setSize = (stem: string, run: number, od_mm: number) =>
     body: JSON.stringify({ run, od_mm }),
   }).then(j<JobDetail>);
 
+export type ManualBend = { angle: number; roll: number; distance: number };
+export const runManual = (bends: ManualBend[]) =>
+  fetch(`${API}/api/machine/manual`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bends }),
+  }).then(j<MachineResult>);
+
 export const fileUrl = (path: string) => `${API}${path}`;
