@@ -27,7 +27,7 @@ export type JobDetail = {
   urls: Record<string, string>; runs: Run[]; sim: boolean; error?: string;
 };
 
-export type Command = { board: number; cmd: string; response: string };
+export type Command = { board: number; cmd: string; response: string; stick?: number };
 export type Axis = { position: number; enabled: boolean };
 export type MachineResult = {
   ok: boolean; run: number | string;

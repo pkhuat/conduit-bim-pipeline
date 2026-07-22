@@ -457,17 +457,23 @@ def api_machine(stem):
 
     machine = SimMachine(verbose=False)
     sticks = []
+    cmd_stick = []          # 1-based stick index per firmware command (the machine bends
+    sidx = 0                # one stick at a time; cutting + coupling are done by hand)
     for r in runs:
         for p in r.get("pieces", []):
             if not p.get("bends"):
                 continue
+            sidx += 1
+            before = len(machine.history)
             _driver.run_stick(machine, p["bends"],
                               f"run {r['run']} stick {p['piece']}", verbose=False)
-            sticks.append({"run": r["run"], "piece": p["piece"], "bends": len(p["bends"])})
+            cmd_stick.extend([sidx] * (len(machine.history) - before))
+            sticks.append({"run": r["run"], "piece": p["piece"], "bends": len(p["bends"]), "stick": sidx})
 
     CAP = 6000  # keep the payload sane if a whole building is driven
     hist = machine.history
-    commands = [{"board": b, "cmd": c, "response": resp} for (b, c, resp) in hist[:CAP]]
+    commands = [{"board": b, "cmd": c, "response": resp, "stick": cmd_stick[i]}
+                for i, (b, c, resp) in enumerate(hist[:CAP])]
     final = {name: {"position": round(ax["position"], 2), "enabled": ax["enabled"]}
              for name, ax in machine.axes.items()}
     return {"ok": True, "stem": stem, "run": which, "sticks": sticks,
@@ -552,7 +558,7 @@ def api_machine_manual():
                       "rotate": abs(roll), "roll_dir": 1 if roll > 0 else -1 if roll < 0 else 0})
     machine = SimMachine(verbose=False)
     _driver.run_stick(machine, bends, "manual bend program", verbose=False)
-    commands = [{"board": bd, "cmd": c, "response": r} for (bd, c, r) in machine.history]
+    commands = [{"board": bd, "cmd": c, "response": r, "stick": 1} for (bd, c, r) in machine.history]
     final = {n: {"position": round(ax["position"], 2), "enabled": ax["enabled"]}
              for n, ax in machine.axes.items()}
     svg, path = _manual_geometry(bends)

@@ -202,7 +202,7 @@ export default function Conduit3D({ verts, angles, cuts, progress = 1 }: Props) 
         position: "absolute", left: 12, bottom: 10, fontSize: 11.5, color: "#7fa39f",
         fontFamily: "var(--font-mono, monospace)", pointerEvents: "none", lineHeight: 1.5,
       }}>
-        drag to orbit &middot; each color = one 10-ft stick &middot; silver collar = coupler<br />hover a bend for angle &amp; roll
+        drag to orbit &middot; each color = one 10-ft stick &middot; silver collar = cut &amp; couple by hand<br />hover a bend for angle &amp; roll
       </div>
     </div>
   );

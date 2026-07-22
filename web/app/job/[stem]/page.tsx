@@ -326,10 +326,20 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
   const [shown, setShown] = useState(0);
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [waiting, setWaiting] = useState(false);   // stopped at a stick boundary for a hand cut & couple
   const consoleRef = useRef<HTMLDivElement>(null);
 
+  // command indices that begin a NEW stick — the machine bends one stick, then you
+  // cut & couple by hand before the next
+  const stickStarts = useMemo(() => {
+    const s = new Set<number>();
+    if (res) for (let i = 1; i < res.commands.length; i++)
+      if (res.commands[i].stick !== res.commands[i - 1].stick) s.add(i);
+    return s;
+  }, [res]);
+
   const startWith = useCallback(async (selection: Sel) => {
-    setPhase("loading"); setRes(null); setShown(0); setPaused(false);
+    setPhase("loading"); setRes(null); setShown(0); setPaused(false); setWaiting(false);
     try {
       const r = await runMachine(job.stem, selection);
       if (!r.ok) { setPhase("idle"); alert(r.error || "Machine run failed"); return; }
@@ -357,23 +367,26 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
 
   const restart = useCallback(() => {
     if (!res) return;
-    setShown(0); setPaused(false); setPhase("run");
+    setShown(0); setPaused(false); setWaiting(false); setPhase("run");
   }, [res]);
 
-  // animate the command stream — honors pause and the speed control
+  // animate the command stream — honors pause/speed, and stops at each stick
+  // boundary so the operator can cut & couple by hand before continuing
   useEffect(() => {
-    if (phase !== "run" || !res || paused) return;
+    if (phase !== "run" || !res || paused || waiting) return;
     const total = res.commands.length;
     const per = Math.max(1, Math.floor(total / 200));
     const id = setInterval(() => {
       setShown((s) => {
         const next = s + per;
+        for (let b = s + 1; b <= Math.min(next, total); b++)
+          if (stickStarts.has(b)) { setWaiting(true); return b; }   // pause at end of the stick
         if (next >= total) { clearInterval(id); setPhase("done"); return total; }
         return next;
       });
     }, Math.max(8, Math.round(30 / speed)));
     return () => clearInterval(id);
-  }, [phase, res, paused, speed]);
+  }, [phase, res, paused, speed, waiting, stickStarts]);
 
   useEffect(() => { if (consoleRef.current) consoleRef.current.scrollTop = consoleRef.current.scrollHeight; }, [shown]);
 
@@ -388,6 +401,8 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
   const tail = res ? res.commands.slice(Math.max(0, shown - 220), shown) : [];
   const curRun = typeof sel === "number" ? job.runs.find((r) => r.run === sel) ?? null : null;
   const formProgress = res ? (total ? shown / total : 1) : 1;
+  const nSticks = res?.counts.sticks ?? 0;
+  const curStick = res && shown > 0 ? (res.commands[Math.min(shown, total) - 1]?.stick ?? 1) : 1;
 
   return (
     <div className="machine">
@@ -412,15 +427,23 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
             </button>
           </div>
           <div className="sub" style={{ margin: "10px 0 0", fontSize: 12.5 }}>
-            Simulation only — drives the ClearCore command protocol through the firmware model. No serial port is opened; nothing physical moves.
+            The bender does one 10-ft stick at a time — it pauses after each so you cut &amp; couple the next by hand.
+            Simulation only: drives the ClearCore command protocol through the firmware model; nothing physical moves.
           </div>
         </div>
 
         <div className="progress" style={{ marginTop: 14 }}><div style={{ width: `${pct}%` }} /></div>
         <div className="row" style={{ justifyContent: "space-between", fontSize: 12.5 }}>
           <span className="muted">{res ? `${shown} / ${total} commands` : "idle"}</span>
-          {res && <span className="muted">{res.counts.sticks} sticks · {res.counts.warnings} warnings{res.truncated ? " · truncated" : ""}</span>}
+          {res && <span className="muted">{nSticks > 1 ? `stick ${curStick} of ${nSticks} · ` : ""}{res.counts.warnings} warning{res.counts.warnings === 1 ? "" : "s"}{res.truncated ? " · truncated" : ""}</span>}
         </div>
+
+        {waiting && (
+          <div className="banner warn" style={{ marginTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <span>✂ <b>Stick {curStick} bent.</b> Cut the next 10-ft stick &amp; couple it by hand, then continue.</span>
+            <button className="btn sm" onClick={() => setWaiting(false)}>Continue → stick {Math.min(curStick + 1, nSticks)}</button>
+          </div>
+        )}
 
         {res && (
           <div className="row" style={{ marginTop: 12, gap: 8 }}>
@@ -474,10 +497,18 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
           {tail.length === 0 && <div className="muted">Press <b style={{ color: "#cfe0ff" }}>Run machine</b> to drive the selected run through the simulator.</div>}
           {tail.map((c: Command, i) => {
             const isErr = c.response.startsWith("ERR");
+            const newStick = i > 0 && c.stick !== tail[i - 1].stick;
             return (
-              <div className="line" key={i}>
-                <span className={c.board === 2 ? "b2" : "hd"}>{c.board}</span>{"  "}
-                {c.cmd}{"  "}<span className={isErr ? "err" : "resp"}>→ {c.response}</span>
+              <div key={i}>
+                {newStick && (
+                  <div className="line" style={{ color: "#e0a54f", margin: "5px 0", opacity: .9 }}>
+                    ── cut &amp; couple by hand · load stick {c.stick} ──
+                  </div>
+                )}
+                <div className="line">
+                  <span className={c.board === 2 ? "b2" : "hd"}>{c.board}</span>{"  "}
+                  {c.cmd}{"  "}<span className={isErr ? "err" : "resp"}>→ {c.response}</span>
+                </div>
               </div>
             );
           })}
