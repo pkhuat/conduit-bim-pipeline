@@ -386,6 +386,8 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
   const total = res?.commands.length ?? 0;
   const pct = total ? Math.round((shown / total) * 100) : 0;
   const tail = res ? res.commands.slice(Math.max(0, shown - 220), shown) : [];
+  const curRun = typeof sel === "number" ? job.runs.find((r) => r.run === sel) ?? null : null;
+  const formProgress = res ? (total ? shown / total : 1) : 1;
 
   return (
     <div className="machine">
@@ -447,6 +449,15 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
             </div>
           ))}
         </div>
+
+        {curRun?.path && (
+          <div className="panel" style={{ marginTop: 14, padding: 12 }}>
+            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
+              RUN #{curRun.run} — {phase === "run" ? "forming as it bends" : "3-D shape"}
+            </div>
+            <Conduit3D verts={curRun.path.verts} angles={curRun.path.angles} cuts={curRun.path.cuts} progress={formProgress} />
+          </div>
+        )}
 
         {phase === "done" && res && (
           <div className={`banner ${res.warnings.length ? "warn" : "ok"}`} style={{ marginTop: 14 }}>
