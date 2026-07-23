@@ -223,6 +223,20 @@ b, strong { color: inherit; }
 /* ---- misc ---- */
 .muted { color: var(--muted); }
 .empty { text-align: center; color: var(--muted); padding: 44px 20px; }
+
+/* ---- shop-floor step chips ---- */
+.stepchip { font-family: var(--font-data); font-size: 11px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border-2); background: var(--surface); color: var(--muted); cursor: pointer; transition: .1s; }
+.stepchip:hover { border-color: var(--accent); }
+.stepchip.on { background: var(--good-weak); color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); }
+.tbl tr.donerow td { background: color-mix(in srgb, var(--good) 8%, transparent); }
+.stepcell { display: flex; gap: 5px; flex-wrap: wrap; }
+
+/* ---- per-stick bend cards (traveler) ---- */
+.bendcards { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; }
+.bendcard { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 13px; box-shadow: var(--shadow-1); break-inside: avoid; }
+.bendcard .bc-head { font-family: var(--font-data); font-size: 12.5px; font-weight: 600; color: var(--accent-text); margin-bottom: 9px; letter-spacing: .01em; }
+.bendcard .tbl { box-shadow: none; }
+.bendcard .tbl th { padding: 7px 10px; } .bendcard .tbl td { padding: 7px 10px; }
 .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; }
 @keyframes sp { to { transform: rotate(360deg); } }
 

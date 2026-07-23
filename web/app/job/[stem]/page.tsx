@@ -17,6 +17,9 @@ const Conduit3D = dynamic(() => import("../../../components/Conduit3D"), {
 
 type Tab = "overview" | "runs" | "machine";
 
+const inMark = (mm: number) => `${(mm / 25.4).toFixed(1)}"`;                 // mark distance in inches
+const ftInFromFt = (ft: number) => { const t = Math.round(ft * 12); const f = Math.floor(t / 12); const i = t - f * 12; return f > 0 ? `${f}' ${i}"` : `${i}"`; };
+
 export default function Workspace() {
   const stem = String(useParams().stem);
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -182,7 +185,19 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
   const [busy, setBusy] = useState(false);
   const [od, setOd] = useState("");
   const [view3d, setView3d] = useState(true);
+  const [fab, setFab] = useState<Record<number, { cut?: boolean; bent?: boolean; coupled?: boolean }>>({});
   const hasOdd = run.review.some((r) => r.startsWith("odd angle"));
+
+  useEffect(() => {
+    try { setFab(JSON.parse(localStorage.getItem(`tubender:fab:${stem}:${run.run}`) || "{}")); } catch { setFab({}); }
+  }, [stem, run.run]);
+  const toggleStep = (piece: number, step: "cut" | "bent" | "coupled") => setFab((prev) => {
+    const next = { ...prev, [piece]: { ...prev[piece], [step]: !prev[piece]?.[step] } };
+    try { localStorage.setItem(`tubender:fab:${stem}:${run.run}`, JSON.stringify(next)); } catch { /* ignore */ }
+    return next;
+  });
+  const stickDone = (p: number) => !!(fab[p]?.cut && fab[p]?.bent && fab[p]?.coupled);
+  const doneCount = run.pieces.filter((p) => stickDone(p.piece)).length;
   const hasUnknownSize = run.review.some((r) => r.startsWith("unknown size"));
 
   async function standardize() {
@@ -277,39 +292,65 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
 
       {run.n_bends > 0 && (
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Sticks</h2>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <h2 style={{ margin: 0 }}>Sticks &amp; shop floor</h2>
+            <span className={`badge ${doneCount === run.pieces.length ? "ok" : "mut"}`}>{doneCount} / {run.pieces.length} sticks done</span>
+          </div>
           <div style={{ overflowX: "auto" }}>
             <table className="tbl">
-              <thead><tr><th>Stick</th><th>Load</th><th>End</th><th className="num">Cut (ft)</th><th className="num">Bends</th></tr></thead>
+              <thead><tr><th>Stick</th><th>Load</th><th>End</th><th className="num">Cut (ft)</th><th className="num">Bends</th><th>Track (tap as you go)</th></tr></thead>
               <tbody>
                 {run.pieces.map((p) => (
-                  <tr key={p.piece}>
+                  <tr key={p.piece} className={stickDone(p.piece) ? "donerow" : ""}>
                     <td>#{p.piece}</td><td className="muted">{p.load}</td><td className="muted">{p.end}</td>
                     <td className="num">{p.cut_length_ft}</td><td className="num">{p.bends.length}</td>
+                    <td>
+                      <div className="stepcell">
+                        {(["cut", "bent", "coupled"] as const).map((st) => (
+                          <button key={st} className={`stepchip ${fab[p.piece]?.[st] ? "on" : ""}`} onClick={() => toggleStep(p.piece, st)}>
+                            {fab[p.piece]?.[st] ? "✓ " : ""}{st}
+                          </button>
+                        ))}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>Tap each step as you fabricate a stick — saved on this device.</p>
         </div>
       )}
 
-      {run.bends.length > 0 && (
+      {run.pieces.some((p) => p.bends.length > 0) && (
         <div className="panel">
-          <h2 style={{ marginTop: 0 }}>Bends</h2>
-          <div style={{ overflowX: "auto" }}>
-            <table className="tbl">
-              <thead><tr><th>#</th><th className="num">Angle</th><th className="num">Roll</th></tr></thead>
-              <tbody>
-                {run.bends.map((b, i) => (
-                  <tr key={i}>
-                    <td>{i + 1}</td>
-                    <td className="num">{b.angle}°</td>
-                    <td className="num">{b.rotate ? `${b.rotate}° ${b.roll_dir > 0 ? "CW" : b.roll_dir < 0 ? "CCW" : ""}` : "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <h2 style={{ marginTop: 0 }}>Bend cards</h2>
+          <p className="muted" style={{ fontSize: 12.5, margin: "0 0 12px" }}>
+            One card per stick — cut to length, then measure &amp; mark from the load end at each distance and bend. Marks are take-up corrected.
+          </p>
+          <div className="bendcards">
+            {run.pieces.filter((p) => p.bends.length > 0).map((p) => {
+              let acc = 0;
+              const rows = p.bends.map((b) => { acc += b.advance; return { mark: acc, angle: b.angle, rotate: b.rotate, roll_dir: b.roll_dir }; });
+              return (
+                <div key={p.piece} className="bendcard">
+                  <div className="bc-head">STICK #{p.piece} · cut {ftInFromFt(p.cut_length_ft)} · {p.load} → {p.end}</div>
+                  <table className="tbl">
+                    <thead><tr><th>#</th><th className="num">Mark @</th><th className="num">Bend</th><th>Roll</th></tr></thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i}>
+                          <td>{i + 1}</td>
+                          <td className="num">{inMark(r.mark)}</td>
+                          <td className="num">{r.angle}°</td>
+                          <td>{r.rotate ? `${r.rotate}° ${r.roll_dir > 0 ? "CW" : r.roll_dir < 0 ? "CCW" : ""}` : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
