@@ -187,6 +187,7 @@ def process_one(path, resolve_odd=False, resolve_runs=None, size_overrides=None)
             "run": r["run"],
             "kind": r["kind"],
             "od_mm": r["od_mm"],
+            "bend_radius_mm": round(br.ec.bend_radius_mm(r["od_mm"]), 1),
             "die": br.ec.die_label(r["kind"], r["od_mm"]),
             "length_ft": round(r["length_mm"] / MM_PER_FT, 1),
             "n_bends": len(r["bends"]),

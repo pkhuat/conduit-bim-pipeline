@@ -158,7 +158,7 @@ export default function BendBuilder() {
                 </div>
                 {view3d && res.path
                   ? <Conduit3D verts={res.path.verts} angles={res.path.angles} cuts={res.path.cuts}
-                      progress={total ? shown / total : 1} />
+                      progress={total ? shown / total : 1} od_mm={res.path.od_mm} bend_radius_mm={res.path.bend_radius_mm} />
                   : <div className="diagram" ref={diagRef} dangerouslySetInnerHTML={{ __html: res.svg || "" }} />}
               </div>
             )}

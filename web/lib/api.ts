@@ -12,9 +12,9 @@ export type Piece = {
   piece: number; load: string; end: string;
   length_ft: number; cut_length_ft: number; bends: Bend[]; tail_advance: number;
 };
-export type Path3D = { verts: number[][]; angles: number[]; cuts?: number[] };
+export type Path3D = { verts: number[][]; angles: number[]; cuts?: number[]; od_mm?: number | null; bend_radius_mm?: number | null };
 export type Run = {
-  run: number; kind: string; od_mm: number | null; die: string;
+  run: number; kind: string; od_mm: number | null; bend_radius_mm: number | null; die: string;
   length_ft: number; n_bends: number; n_sticks: number;
   review: string[]; svg: string | null; path: Path3D | null; bends: Bend[]; pieces: Piece[];
 };

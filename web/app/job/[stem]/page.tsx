@@ -259,7 +259,8 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
             </div>
           </div>
           {view3d && run.path ? (
-            <Conduit3D verts={run.path.verts} angles={run.path.angles} cuts={run.path.cuts} />
+            <Conduit3D verts={run.path.verts} angles={run.path.angles} cuts={run.path.cuts}
+              od_mm={run.od_mm} bend_radius_mm={run.bend_radius_mm} />
           ) : run.svg ? (
             <>
               <div className="diagram" dangerouslySetInnerHTML={{ __html: run.svg }} />
@@ -478,7 +479,8 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
             <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
               RUN #{curRun.run} — {phase === "run" ? "forming as it bends" : "3-D shape"}
             </div>
-            <Conduit3D verts={curRun.path.verts} angles={curRun.path.angles} cuts={curRun.path.cuts} progress={formProgress} />
+            <Conduit3D verts={curRun.path.verts} angles={curRun.path.angles} cuts={curRun.path.cuts}
+              progress={formProgress} od_mm={curRun.od_mm} bend_radius_mm={curRun.bend_radius_mm} />
           </div>
         )}
 

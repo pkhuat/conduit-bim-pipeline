@@ -524,7 +524,9 @@ def _manual_geometry(bends):
         cuts.append(round(k * STICK, 1)); k += 1
     run = {"run": 0, "kind": "manual", "length_ft": total / 304.8, "verts": verts,
            "angles": angles, "cuts": cuts, "sticks": len(cuts) + 1}
-    path = {"verts": [[round(c, 1) for c in v] for v in verts], "angles": angles, "cuts": cuts}
+    od = 21.3  # nominal 1/2" EMT for the visual (hand programs carry no conduit size)
+    path = {"verts": [[round(c, 1) for c in v] for v in verts], "angles": angles, "cuts": cuts,
+            "od_mm": od, "bend_radius_mm": round(process.br.ec.bend_radius_mm(od), 1)}
     try:
         return process.bd.svg_for(run), path
     except Exception:
