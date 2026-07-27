@@ -22,9 +22,13 @@ export type Stats = {
   conduit: string; conduits: number; bends: number; sticks: number;
   total_ft: number; raw_sticks: number; review: number; flags: string[];
 };
+export type Material = {
+  label: string; runs: number; sticks: number; couplers: number; bends: number;
+  offsets: number; saddles: number; buy_sticks: number; len_ft: number;
+};
 export type JobDetail = {
   ok: boolean; stem: string; name: string; stats: Stats;
-  urls: Record<string, string>; runs: Run[]; sim: boolean; error?: string;
+  urls: Record<string, string>; runs: Run[]; materials?: Material[]; sim: boolean; error?: string;
 };
 
 export type Command = { board: number; cmd: string; response: string; stick?: number };

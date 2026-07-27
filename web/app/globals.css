@@ -240,13 +240,47 @@ b, strong { color: inherit; }
 .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -2px; }
 @keyframes sp { to { transform: rotate(360deg); } }
 
-/* ---- print: the per-run job traveler ---- */
+/* ---- job packet (printable document) ---- */
+.packet { max-width: 900px; margin: 0 auto; padding: 26px 24px 60px; }
+.pk-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 22px; flex-wrap: wrap; }
+.pk-cover { text-align: center; padding: 8px 0 20px; border-bottom: 2px solid var(--brand); margin-bottom: 24px; }
+.pk-brand { font-weight: 800; letter-spacing: .04em; font-size: 20px; color: var(--brand); display: inline-flex; gap: 9px; align-items: center; }
+.pk-brand .dot { width: 13px; height: 13px; border-radius: 3px; background: var(--accent); transform: rotate(45deg); }
+.pk-cover h1 { font-size: 30px; margin: 16px 0 4px; }
+.pk-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 20px; }
+.pk-stats .tile { padding: 12px 10px; text-align: center; }
+.pk-stats .n { font-size: 22px; }
+.pk-sec { margin-bottom: 26px; break-inside: avoid; }
+.pk-sec > h2 { margin-top: 0; border-bottom: 1px solid var(--line); padding-bottom: 7px; }
+.pk-run { margin-bottom: 22px; break-inside: avoid; }
+.pk-run h3 { color: var(--brand); font-size: 15px; margin: 0 0 10px; }
+.pk-diagram { text-align: center; margin: 8px 0 12px; }
+.pk-diagram svg { width: 100%; max-width: 460px; height: auto; display: inline-block; }
+.pk-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+
+/* ---- stick labels sheet ---- */
+.labels { max-width: 900px; margin: 0 auto; padding: 26px 24px 60px; }
+.labelgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.label { border: 1px solid var(--ink); border-radius: 8px; padding: 11px 13px; break-inside: avoid; }
+.label .lh { display: flex; justify-content: space-between; font-family: var(--font-data); font-size: 12px; color: var(--muted); }
+.label .lb { font-size: 19px; font-weight: 800; color: var(--brand); margin: 3px 0; }
+.label .lm { font-size: 12.5px; color: var(--ink-2); }
+@media (max-width: 620px) { .labelgrid { grid-template-columns: repeat(2, 1fr); } .pk-stats { grid-template-columns: repeat(3, 1fr); } }
+
+/* ---- print: the per-run job traveler + packet + labels ---- */
 @media print {
+  /* force a light palette so it prints correctly even from dark mode */
+  :root {
+    --bg: #fff; --surface: #fff; --sunken: #f4f6f6; --border: #ccc; --border-2: #bbb;
+    --ink: #111; --ink-2: #333; --muted: #666; --brand: #12294d; --brand-2: #1d4877;
+    --accent: #0a8a90; --accent-text: #0a6d72; --accent-weak: #eef6f6;
+    --good: #1f7a4d; --warn: #b0611c;
+  }
   .topbar, .tabs, .crumbs, .toolbar, .seg, .noprint, .console, .btn, select, input { display: none !important; }
   body { background: #fff; }
-  .wrap { max-width: none; padding: 0; }
+  .wrap, .packet, .labels { max-width: none; padding: 0; }
   .panel, .tbl { border: 1px solid #bbb !important; box-shadow: none !important; break-inside: avoid; }
-  .banner { border: 1px solid #bbb !important; background: #fff !important; color: #000 !important; }
-  h1 { font-size: 20px; }
+  .banner { border: 1px solid #bbb !important; background: #fff !important; }
+  h1 { font-size: 22px; }
   a[href]::after { content: ""; }
 }

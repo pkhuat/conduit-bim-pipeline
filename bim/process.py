@@ -202,6 +202,12 @@ def process_one(path, resolve_odd=False, resolve_runs=None, size_overrides=None)
             "pieces": run_pieces(r),
         } for r in rows],
     }
+    by, _grand = br.job_totals(rows)     # bill of materials / order sheet, per conduit size
+    runs_json["materials"] = [{"label": lbl, "runs": d["runs"], "sticks": d["sticks"],
+                               "couplers": d["couplers"], "bends": d["bends"],
+                               "offsets": d["offsets"], "saddles": d["saddles"],
+                               "buy_sticks": d["opt_sticks"], "len_ft": round(d["len_mm"] / MM_PER_FT, 1)}
+                              for lbl, d in sorted(by.items())]
     json.dump(runs_json, open(os.path.join(OUTDIR, f"{stem}_runs.json"), "w"), indent=2)
 
     write_index(OUTDIR)                      # refresh the landing page

@@ -414,6 +414,7 @@ def api_job(stem):
         return {"ok": False, "error": "Job not found."}, 404
     payload = _job_payload(stem)
     payload["runs"] = rj["runs"]
+    payload["materials"] = rj.get("materials", [])
     payload["sim"] = _SIM_OK
     return payload
 

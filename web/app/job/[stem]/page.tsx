@@ -101,6 +101,8 @@ function Overview({ job }: { job: JobDetail }) {
       </div>
       <div className="row" style={{ marginTop: 20 }}>
         <a className="btn" href={fileUrl(job.urls.download)}>⭳ Download package (.zip)</a>
+        <a className="btn ghost" href={`/job/${job.stem}/packet`} target="_blank" rel="noreferrer">📄 Job packet (PDF)</a>
+        <a className="btn ghost" href={`/job/${job.stem}/labels`} target="_blank" rel="noreferrer">🏷 Stick labels</a>
       </div>
     </>
   );
