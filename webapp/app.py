@@ -24,7 +24,7 @@ import zipfile
 import contextlib
 
 from flask import (Flask, request, redirect, url_for, send_file,
-                   send_from_directory, abort)
+                   send_from_directory, abort, Response)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -568,6 +568,71 @@ def api_machine_manual():
             "commands": commands, "truncated": False, "warnings": machine.warnings,
             "final_state": final, "svg": svg, "path": path,
             "counts": {"commands": len(machine.history), "warnings": len(machine.warnings), "sticks": 1}}
+
+
+@app.route("/api/calibration", methods=["GET", "POST", "OPTIONS"])
+def api_calibration():
+    """Read or update the machine calibration (steps/mm, steps/deg, springback,
+    calibrated flag). Once calibrated, every job/program carries motor-step values."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if request.method == "GET":
+        return {"ok": True, "calibration": process.cal.load()}
+    body = request.get_json(silent=True) or {}
+    return {"ok": True, "calibration": process.cal.save(body)}
+
+
+@app.route("/api/jobs/<stem>/program")
+def api_program(stem):
+    """Download a run's machine program — the firmware command sequence, in motor
+    steps when calibrated (else conduit units, clearly flagged)."""
+    if not _valid_stem(stem):
+        abort(404)
+    if not _SIM_OK:
+        return {"ok": False, "error": "Machine driver unavailable on this server."}, 503
+    rj = _load_runs(stem)
+    if rj is None:
+        abort(404)
+    try:
+        run_no = int(request.args.get("run"))
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "run number required."}, 400
+    run = next((r for r in rj["runs"] if r["run"] == run_no), None)
+    if run is None or not any(p.get("bends") for p in run["pieces"]):
+        abort(404)
+
+    process.cal.load()
+    cal = process.cal
+    calibrated = cal.CALIBRATED
+    machine = SimMachine(verbose=False)
+    for p in run["pieces"]:
+        if not p.get("bends"):
+            continue
+        if calibrated:
+            sb = [{"advance": round(cal.mm_to_steps(b["advance"])),
+                   "rotate": round(cal.deg_to_steps(b["rotate"], "rotate")),
+                   "roll_dir": b.get("roll_dir", 0),
+                   "angle": round(cal.deg_to_steps(cal.springback(b["angle"]), "bend"))}
+                  for b in p["bends"]]
+        else:
+            sb = p["bends"]
+        _driver.run_stick(machine, sb, "", verbose=False)
+
+    units = "MOTOR STEPS (calibrated)" if calibrated else "mm / deg — UNCALIBRATED (NOT motor steps)"
+    n_sticks = sum(1 for p in run["pieces"] if p.get("bends"))
+    header = [
+        "# Tubender machine program",
+        f"# job {_display_name(stem)}  ·  run {run_no}  ·  {run.get('die') or run.get('kind', '?')}",
+        f"# units: {units}",
+        f"# {n_sticks} stick(s), {len(machine.history)} commands  ·  simulation-verified",
+        "# The bender does one stick at a time; cut & couple by hand between sticks",
+        "# (each stick starts CHUCK CLOSE and ends CHUCK OPEN). Review before hardware.",
+        "",
+    ]
+    text = "\n".join(header + [cmd for (_b, cmd, _r) in machine.history]) + "\n"
+    fn = f"{_display_name(stem)}_run{run_no}_program.txt"
+    return Response(text, mimetype="text/plain",
+                    headers={"Content-Disposition": f'attachment; filename="{fn}"'})
 
 
 def _overrides_path(stem):

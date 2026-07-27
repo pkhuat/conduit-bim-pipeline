@@ -86,6 +86,7 @@ def process_one(path, resolve_odd=False, resolve_runs=None, size_overrides=None)
             os.remove(old)
         except OSError:
             pass
+    cal.load()      # pick up the latest calibration (file is source of truth across workers)
 
     # 1) schedule + CSVs  (resolve_odd standardizes all odd-angle runs; resolve_runs
     #    standardizes just the listed run numbers — a per-run fix from the app)

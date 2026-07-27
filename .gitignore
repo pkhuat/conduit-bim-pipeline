@@ -3,3 +3,4 @@ __pycache__/
 bim/out/
 .DS_Store
 webapp/uploads/
+calibration.local.json

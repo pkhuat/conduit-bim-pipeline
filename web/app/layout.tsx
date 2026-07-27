@@ -27,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <nav>
               <Link href="/">Jobs</Link>
               <Link href="/bend">New bend</Link>
+              <Link href="/calibration">Calibration</Link>
             </nav>
             <span className="spacer" />
             <span className="env"><span className="dotlive" aria-hidden="true" />Fabrication Console</span>

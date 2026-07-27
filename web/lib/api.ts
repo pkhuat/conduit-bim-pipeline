@@ -83,4 +83,16 @@ export const runManual = (bends: ManualBend[]) =>
     body: JSON.stringify({ bends }),
   }).then(j<MachineResult>);
 
+export type Calibration = {
+  calibrated: boolean; advance_steps_per_mm: number; rotate_steps_per_deg: number;
+  bend_steps_per_deg: number; springback_factor: number; springback_offset_deg: number;
+};
+export const getCalibration = () =>
+  fetch(`${API}/api/calibration`, { cache: "no-store" }).then(j<{ ok: boolean; calibration: Calibration }>);
+export const saveCalibration = (patch: Partial<Calibration>) =>
+  fetch(`${API}/api/calibration`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+  }).then(j<{ ok: boolean; calibration: Calibration }>);
+export const programUrl = (stem: string, run: number) => `${API}/api/jobs/${stem}/program?run=${run}`;
+
 export const fileUrl = (path: string) => `${API}${path}`;

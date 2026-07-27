@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  fileUrl, getJob, runMachine, resolveRun, setSize, getTradeSizes,
+  fileUrl, getJob, runMachine, resolveRun, setSize, getTradeSizes, programUrl,
   type JobDetail, type Run, type MachineResult, type Command, type TradeSize,
 } from "../../../lib/api";
 import { AXES, freshAxes, applyCmd } from "../../../lib/machine";
@@ -220,6 +220,7 @@ function RunDetail({ run, stem, sizes, refresh, onBack, onSend }:
       <div className="row noprint" style={{ justifyContent: "space-between" }}>
         <button className="btn ghost sm" onClick={onBack}>← All runs</button>
         <span className="row">
+          {run.n_bends > 0 && <a className="btn ghost sm" href={programUrl(stem, run.run)}>⤓ Machine program</a>}
           <button className="btn ghost sm" onClick={() => window.print()}>🖨 Print traveler</button>
           <button className="btn green sm" disabled={run.n_bends === 0} onClick={onSend}>Send to machine →</button>
         </span>
@@ -472,6 +473,11 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
             The bender does one 10-ft stick at a time — it pauses after each so you cut &amp; couple the next by hand.
             Simulation only: drives the ClearCore command protocol through the firmware model; nothing physical moves.
           </div>
+          {curRun && curRun.n_bends > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <a className="btn ghost sm" href={programUrl(job.stem, curRun.run)}>⤓ Download machine program (run #{curRun.run})</a>
+            </div>
+          )}
         </div>
 
         <div className="progress" style={{ marginTop: 14 }}><div style={{ width: `${pct}%` }} /></div>
