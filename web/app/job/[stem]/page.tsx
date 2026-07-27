@@ -14,6 +14,10 @@ const Conduit3D = dynamic(() => import("../../../components/Conduit3D"), {
   ssr: false,
   loading: () => <div className="empty" style={{ height: 380 }}>Loading 3-D viewer…</div>,
 });
+const Bender3D = dynamic(() => import("../../../components/Bender3D"), {
+  ssr: false,
+  loading: () => <div className="empty" style={{ height: 400 }}>Loading bender…</div>,
+});
 
 type Tab = "overview" | "runs" | "machine";
 
@@ -370,6 +374,7 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [waiting, setWaiting] = useState(false);   // stopped at a stick boundary for a hand cut & couple
+  const [show3d, setShow3d] = useState<"bender" | "conduit">("bender");
   const consoleRef = useRef<HTMLDivElement>(null);
 
   // command indices that begin a NEW stick — the machine bends one stick, then you
@@ -523,11 +528,19 @@ function Machine({ job, target }: { job: JobDetail; target: number | number[] | 
 
         {curRun?.path && (
           <div className="panel" style={{ marginTop: 14, padding: 12 }}>
-            <div className="muted" style={{ fontSize: 12, marginBottom: 6 }}>
-              RUN #{curRun.run} — {phase === "run" ? "forming as it bends" : "3-D shape"}
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+              <span className="muted" style={{ fontSize: 12 }}>
+                {show3d === "bender" ? "THE BENDER — watch it work" : `RUN #${curRun.run} — ${phase === "run" ? "forming as it bends" : "3-D shape"}`}
+              </span>
+              <div className="seg">
+                <button className={show3d === "bender" ? "on" : ""} onClick={() => setShow3d("bender")}>Bender</button>
+                <button className={show3d === "conduit" ? "on" : ""} onClick={() => setShow3d("conduit")}>Conduit</button>
+              </div>
             </div>
-            <Conduit3D verts={curRun.path.verts} angles={curRun.path.angles} cuts={curRun.path.cuts}
-              progress={formProgress} od_mm={curRun.od_mm} bend_radius_mm={curRun.bend_radius_mm} />
+            {show3d === "bender"
+              ? <Bender3D bend={axes.BEND.position} squeeze={axes.SQUEEZE.position > 100} />
+              : <Conduit3D verts={curRun.path.verts} angles={curRun.path.angles} cuts={curRun.path.cuts}
+                  progress={formProgress} od_mm={curRun.od_mm} bend_radius_mm={curRun.bend_radius_mm} />}
           </div>
         )}
 
