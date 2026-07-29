@@ -40,6 +40,7 @@ export type MachineResult = {
   final_state: Record<string, Axis>;
   counts: { commands: number; warnings: number; sticks: number };
   svg?: string | null; path?: Path3D | null; error?: string;
+  live?: boolean; clamped?: boolean; safe?: boolean; caps?: Record<string, number>;
 };
 
 async function j<T>(r: Response): Promise<T> {
@@ -86,6 +87,46 @@ export const runManual = (bends: ManualBend[]) =>
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ bends }),
   }).then(j<MachineResult>);
+
+// Whether this server drives the REAL bender or the simulator, + the safe caps.
+export type MachineMode = {
+  ok: boolean; mode: "real" | "sim"; live: boolean; safe: boolean;
+  caps: Record<string, number>;
+};
+export const getMachineMode = () =>
+  fetch(`${API}/api/machine/mode`, { cache: "no-store" }).then(j<MachineMode>);
+
+// Run a hand-built program on the selected machine. `live` must be true to move
+// real hardware; the server also refuses a live server unless it's set.
+export const runMachineProgram = (bends: ManualBend[], live = false) =>
+  fetch(`${API}/api/machine/run`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bends, live }),
+  }).then(j<MachineResult>);
+
+export const machineEstop = () =>
+  fetch(`${API}/api/machine/estop`, { method: "POST" })
+    .then(j<{ ok: boolean; live: boolean; stopped: boolean }>);
+
+// Live per-axis STATUS from the real machine (idle snapshot in sim).
+export type MachineState = { ok: boolean; live: boolean; axes: Record<string, string> };
+export const getMachineState = () =>
+  fetch(`${API}/api/machine/state`, { cache: "no-store" }).then(j<MachineState>);
+
+// Manual Xbox jog that shares the machine with the UI's bend programs (real mode).
+export type XboxStatus = {
+  ok: boolean; live: boolean; available: boolean;
+  controller: string | null; reason: string | null; running: boolean;
+  error?: string | null; note?: string;
+};
+export const getXbox = () =>
+  fetch(`${API}/api/machine/xbox`, { cache: "no-store" }).then(j<XboxStatus>);
+export const setXbox = (action: "start" | "stop") =>
+  fetch(`${API}/api/machine/xbox`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  }).then(j<XboxStatus>);
 
 export type Calibration = {
   calibrated: boolean; advance_steps_per_mm: number; rotate_steps_per_deg: number;

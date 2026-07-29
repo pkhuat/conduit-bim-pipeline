@@ -107,6 +107,29 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.01em; color: var(--ink
 .btn.green:hover { background: var(--btn-bg-hover); }
 .btn.sm { padding: 7px 12px; font-size: 13px; border-radius: 9px; }
 .btn:disabled, .btn:disabled:hover { background: var(--sunken); color: var(--muted); border-color: var(--border); box-shadow: none; transform: none; cursor: default; }
+/* live-hardware actions: danger fill + a heavy e-stop button, so a real-motion
+   click can never look like a routine one */
+.btn.danger { background: var(--danger); color: #fff; }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 88%, #000); }
+.btn.estop { background: var(--danger); color: #fff; font-weight: 700; letter-spacing: .04em;
+  border: 2px solid color-mix(in srgb, var(--danger) 60%, #000); }
+.btn.estop:hover { background: color-mix(in srgb, var(--danger) 85%, #000); }
+
+/* sim-vs-live machine banner on the New-bend page */
+.machine-mode { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border-radius: var(--r); padding: 12px 16px; margin: 0 0 16px; border: 1px solid var(--border); }
+.machine-mode .mm-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.machine-mode .mm-dot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
+.machine-mode.sim { background: var(--surface); }
+.machine-mode.sim .mm-dot { background: var(--muted); }
+.machine-mode.sim b { color: var(--ink-2); letter-spacing: .04em; font-size: 12.5px; }
+.machine-mode.live { background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent); }
+.machine-mode.live .mm-dot { background: var(--danger); box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 22%, transparent);
+  animation: mm-pulse 1.4s ease-in-out infinite; }
+.machine-mode.live b { color: var(--danger); letter-spacing: .04em; font-size: 12.5px; }
+@keyframes mm-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--danger) 6%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .machine-mode.live .mm-dot { animation: none; } }
 
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 

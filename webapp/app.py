@@ -44,6 +44,16 @@ try:
 except Exception:                                # machine/ not present -> machine view disabled
     _SIM_OK = False
 
+sys.path.insert(0, HERE)
+try:
+    import machine_runtime as _mach              # sim/real machine selection + safe-run guard rails
+except Exception:
+    _mach = None
+try:
+    import xbox_service as _xbox                 # gamepad jog on the shared machine (real mode)
+except Exception:
+    _xbox = None
+
 # --- configuration (env-overridable for production) ---------------------------
 PORT = int(os.environ.get("PORT", "5050"))
 MAX_UPLOAD_MB = int(os.environ.get("MAX_UPLOAD_MB", "250"))
@@ -569,6 +579,122 @@ def api_machine_manual():
             "commands": commands, "truncated": False, "warnings": machine.warnings,
             "final_state": final, "svg": svg, "path": path,
             "counts": {"commands": len(machine.history), "warnings": len(machine.warnings), "sticks": 1}}
+
+
+@app.route("/api/machine/mode")
+def api_machine_mode():
+    """Whether this server drives the REAL machine or the simulator, plus the
+    safe-run caps. The UI reads this to show the LIVE vs SIMULATION banner."""
+    if _mach is None:
+        return {"ok": True, "mode": "sim", "live": False, "safe": True, "caps": {}}
+    return {"ok": True, **_mach.mode_info()}
+
+
+@app.route("/api/machine/run", methods=["POST", "OPTIONS"])
+def api_machine_run():
+    """Run a hand-built bend program on the SELECTED machine — the simulator by
+    default, or the REAL bender when this server is started with
+    CONDUIT_MACHINE=real (on the Pi). Body: {bends:[{angle,roll,distance}], live}.
+
+    A live run is refused unless the client explicitly sets live:true, so the same
+    button can never move hardware by accident. In SAFE_MODE every motion is
+    clamped to a small cap — the milestone-1 wired test."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if not _SIM_OK or _mach is None:
+        return {"ok": False, "error": "Machine driver unavailable on this server."}, 503
+    body = request.get_json(silent=True) or {}
+    raw = body.get("bends")
+    if not isinstance(raw, list) or not (1 <= len(raw) <= 4):
+        return {"ok": False, "error": "Provide 1 to 4 bends."}, 400
+    bends = []
+    for b in raw:
+        try:
+            angle = float(b.get("angle"))
+            roll = float(b.get("roll") or 0)
+            dist_in = float(b.get("distance") or 0)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Each bend needs a numeric angle."}, 400
+        if not (0 <= angle <= 90):
+            return {"ok": False, "error": "Each bend angle must be between 0 and 90°."}, 400
+        bends.append({"advance": round(dist_in * 25.4, 1), "angle": angle,
+                      "rotate": abs(roll), "roll_dir": 1 if roll > 0 else -1 if roll < 0 else 0})
+
+    want_live = bool(body.get("live"))
+    if _mach.LIVE and not want_live:
+        return {"ok": False, "error": "This server is LIVE. Set live:true to move the real machine."}, 409
+
+    run_bends, clamped = _mach.clamp_bends(bends)
+    with _mach.acquire() as (machine, is_live):
+        with _mach.record(machine) as hist:
+            _driver.run_stick(machine, run_bends, "manual bend program", verbose=False)
+        commands = [{"board": c["board"], "cmd": c["cmd"], "response": c["response"], "stick": 1}
+                    for c in hist]
+        warnings = list(getattr(machine, "warnings", []) or [])
+        final = _mach.final_state(machine)
+    svg, path = _manual_geometry(bends)   # diagram from the ENTERED program, not the clamped one
+    return {"ok": True, "run": "manual", "live": is_live, "clamped": clamped,
+            "safe": _mach.SAFE_MODE, "caps": _mach.CAPS,
+            "sticks": [{"run": 0, "piece": 1, "bends": len(bends)}],
+            "commands": commands, "truncated": False, "warnings": warnings,
+            "final_state": final, "svg": svg, "path": path,
+            "counts": {"commands": len(commands), "warnings": len(warnings), "sticks": 1}}
+
+
+@app.route("/api/machine/estop", methods=["POST", "OPTIONS"])
+def api_machine_estop():
+    """Emergency stop. Sends ESTOP to the real machine (board 1) immediately —
+    it does NOT wait on any in-flight run. No-op in simulation. A physical e-stop
+    stays the primary safety device (see INTEGRATION.md)."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if _mach is None:
+        return {"ok": True, "live": False, "stopped": False}
+    m = _mach.peek_real()
+    if m is not None:
+        try:
+            m.estop()
+        except Exception as e:
+            return {"ok": False, "error": f"ESTOP send failed: {e}"}, 500
+    return {"ok": True, "live": _mach.LIVE, "stopped": m is not None}
+
+
+@app.route("/api/machine/xbox", methods=["GET", "POST", "OPTIONS"])
+def api_machine_xbox():
+    """Manual Xbox jog control that SHARES the one machine with the UI's bend
+    programs (so both can drive it without a serial-port conflict). GET = status;
+    POST {action:'start'|'stop'}. Real mode only; jog is frozen while a program runs."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if _xbox is None:
+        return {"ok": True, "available": False, "running": False,
+                "reason": "Xbox service unavailable on this server."}
+    if request.method == "GET":
+        return {"ok": True, **_xbox.status()}
+    body = request.get_json(silent=True) or {}
+    action = (body.get("action") or "").lower()
+    if action == "start":
+        return _xbox.start()
+    if action == "stop":
+        return _xbox.stop()
+    return {"ok": False, "error": "action must be 'start' or 'stop'."}, 400
+
+
+@app.route("/api/machine/state")
+def api_machine_state():
+    """Live axis state from the real machine (STATUS per axis). Simulation returns
+    an idle snapshot."""
+    if _mach is None or not _mach.LIVE:
+        return {"ok": True, "live": False,
+                "axes": {n: "OK IDLE" for n in ("ADVANCE", "ROTATE", "BEND", "SQUEEZE")}}
+    m = _mach.peek_real()
+    axes = {}
+    for n in ("ADVANCE", "ROTATE", "BEND", "SQUEEZE"):
+        try:
+            axes[n] = m.status(n)
+        except Exception as e:
+            axes[n] = f"ERR {e}"
+    return {"ok": True, "live": True, "axes": axes}
 
 
 @app.route("/api/calibration", methods=["GET", "POST", "OPTIONS"])

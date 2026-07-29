@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { runManual, type MachineResult, type Command, type ManualBend } from "../../lib/api";
+import { getMachineMode, runMachineProgram, machineEstop, getXbox, setXbox, getMachineState,
+  type MachineResult, type Command, type ManualBend, type MachineMode,
+  type XboxStatus, type MachineState } from "../../lib/api";
 import { AXES, freshAxes, applyCmd } from "../../lib/machine";
 import dynamic from "next/dynamic";
 
@@ -27,17 +29,55 @@ export default function BendBuilder() {
   const [shown, setShown] = useState(0);
   const [paused, setPaused] = useState(false);
   const [view3d, setView3d] = useState(true);
+  const [mode, setMode] = useState<MachineMode | null>(null);
+  const [estopped, setEstopped] = useState(false);
+  const [xbox, setXboxState] = useState<XboxStatus | null>(null);
+  const [mstate, setMstate] = useState<MachineState | null>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
   const diagRef = useRef<HTMLDivElement>(null);
 
+  const live = !!mode?.live;
+
+  useEffect(() => { getMachineMode().then(setMode).catch(() => setMode(null)); }, []);
+
+  // While live, poll the controller status + axis state so the manual panel is live.
+  useEffect(() => {
+    if (!live) return;
+    let on = true;
+    const tick = () => {
+      getXbox().then((x) => on && setXboxState(x)).catch(() => {});
+      getMachineState().then((s) => on && setMstate(s)).catch(() => {});
+    };
+    tick();
+    const id = setInterval(tick, 1500);
+    return () => { on = false; clearInterval(id); };
+  }, [live]);
+
+  const toggleJog = useCallback(async (action: "start" | "stop") => {
+    try { const x = await setXbox(action); setXboxState(x); }
+    catch { alert("Couldn't reach the machine API."); }
+  }, []);
+
   const run = useCallback(async () => {
-    setPhase("loading"); setRes(null); setShown(0); setPaused(false);
+    if (live) {
+      const ok = window.confirm(
+        "LIVE MACHINE\n\nThis will MOVE THE REAL BENDER. Motions are bounded safe-test " +
+        "moves and angles are not calibrated yet. Make sure the machine area is clear " +
+        "and the physical e-stop is within reach.\n\nRun on the real machine?");
+      if (!ok) return;
+    }
+    setPhase("loading"); setRes(null); setShown(0); setPaused(false); setEstopped(false);
     try {
-      const r = await runManual(bends.slice(0, count));
+      const r = await runMachineProgram(bends.slice(0, count), live);
       if (!r.ok) { setPhase("idle"); alert(r.error || "Run failed"); return; }
       setRes(r); setShown(0); setPhase("run");
     } catch { setPhase("idle"); alert("Couldn't reach the machine API."); }
-  }, [bends, count]);
+  }, [bends, count, live]);
+
+  const estop = useCallback(async () => {
+    setEstopped(true); setPaused(true);
+    try { await machineEstop(); } catch { /* physical e-stop is the real safety device */ }
+  }, []);
 
   useEffect(() => {
     if (phase !== "run" || !res || paused) return;
@@ -82,6 +122,26 @@ export default function BendBuilder() {
       <div className="crumbs"><Link href="/">Jobs</Link> / New bend</div>
       <h1>Create a bend</h1>
       <p className="sub">Build a bend program by hand and run it on the machine — no model needed.</p>
+
+      <div className={`machine-mode ${live ? "live" : "sim"}`}>
+        <div className="mm-left">
+          <span className="mm-dot" />
+          <b>{live ? "LIVE MACHINE" : "SIMULATION"}</b>
+          <span className="muted" style={{ fontSize: 12.5 }}>
+            {live
+              ? (mode?.safe
+                  ? "Running moves the real bender — bounded safe-test motion, angles not yet calibrated."
+                  : "Running moves the real bender — SAFE CAPS OFF.")
+              : "Runs against the ClearCore protocol in software — nothing physical moves."}
+          </span>
+        </div>
+        {live && (
+          <button className="btn estop" onClick={estop} title="Emergency stop (board 1)">
+            ⬛ E-STOP
+          </button>
+        )}
+      </div>
+      {estopped && <div className="banner warn" style={{ marginBottom: 14 }}><b>E-STOP sent.</b> The physical e-stop is the primary safety device — use it if in doubt.</div>}
 
       <div className="panel">
         <div className="row" style={{ gap: 10, marginBottom: 18 }}>
@@ -137,12 +197,57 @@ export default function BendBuilder() {
         )}
 
         <div className="row" style={{ marginTop: 18 }}>
-          <button className="btn green" onClick={run} disabled={phase === "loading" || phase === "run"}>
-            {phase === "loading" || phase === "run" ? <><span className="spin" /> Running…</> : "▶ Run on machine"}
+          <button className={`btn ${live ? "danger" : "green"}`} onClick={run} disabled={phase === "loading" || phase === "run"}>
+            {phase === "loading" || phase === "run"
+              ? <><span className="spin" /> Running…</>
+              : live ? "▶ Run on real machine" : "▶ Run on machine"}
           </button>
-          <span className="muted" style={{ fontSize: 12.5 }}>Simulation only — drives the ClearCore protocol; nothing physical moves.</span>
+          {live && <button className="btn estop sm" onClick={estop}>⬛ E-STOP</button>}
+          <span className="muted" style={{ fontSize: 12.5 }}>
+            {live
+              ? "Moves the real bender (bounded). Clear the area; keep the physical e-stop in reach."
+              : "Simulation only — drives the ClearCore protocol; nothing physical moves."}
+          </span>
         </div>
       </div>
+
+      {live && (
+        <div className="panel" style={{ marginTop: 14 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <b>Manual control — Xbox controller</b>
+              <div className="muted" style={{ fontSize: 12.5, marginTop: 3, maxWidth: 520 }}>
+                {xbox?.running
+                  ? <>Jogging live{xbox.controller ? ` · ${xbox.controller}` : ""} — shares the machine with bend programs; jog freezes automatically while a program runs.</>
+                  : xbox?.available
+                    ? <>Controller ready{xbox.controller ? ` · ${xbox.controller}` : ""}. Start jog to move the machine by hand.</>
+                    : (xbox?.reason || "Checking for a controller…")}
+              </div>
+            </div>
+            {xbox?.running
+              ? <button className="btn ghost" onClick={() => toggleJog("stop")}>■ Stop jog</button>
+              : <button className="btn green" onClick={() => toggleJog("start")} disabled={!xbox?.available}>▶ Start jog</button>}
+          </div>
+          {mstate?.axes && (
+            <div className="axes" style={{ marginTop: 14 }}>
+              {Object.entries(mstate.axes).map(([n, s]) => {
+                const fault = /FAULT|ERR/.test(s);
+                const moving = /MOVING/.test(s);
+                return (
+                  <div className={`axis ${moving ? "enabled" : ""}`} key={n}>
+                    <div className="name">{n}</div>
+                    <div className="val" style={{ fontSize: 12.5 }}>{s.replace(/^OK\s*/, "") || "idle"}</div>
+                    <div className={`en ${fault ? "" : "off"}`}>{fault ? "● fault" : moving ? "● moving" : "○ idle"}</div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="muted" style={{ fontSize: 12, marginTop: 12 }}>
+            Left stick: advance / rotate · Right stick: bend · Triggers: squeeze · Bumpers: chuck · D-pad: enable a motor · B: bend on/off · X: disable all · Y: E-STOP.
+          </div>
+        </div>
+      )}
 
       {res && (
         <div className="machine" style={{ marginTop: 18 }}>
@@ -182,7 +287,8 @@ export default function BendBuilder() {
               <div className={`banner ${res.warnings.length ? "warn" : "ok"}`} style={{ marginTop: 14 }}>
                 {res.warnings.length
                   ? <><b>Completed with {res.warnings.length} warning(s).</b></>
-                  : <><b>✓ Bend program complete.</b> {res.counts.commands} firmware commands, no warnings.</>}
+                  : <><b>✓ {res.live ? "Ran on the real machine." : "Bend program complete."}</b> {res.counts.commands} firmware commands, no warnings.</>}
+                {res.clamped && <div style={{ marginTop: 4, fontSize: 12.5 }}>Motions were clamped to safe caps for this wired test.</div>}
               </div>
             )}
           </div>
