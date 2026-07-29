@@ -53,6 +53,12 @@ try:
     import xbox_service as _xbox                 # gamepad jog on the shared machine (real mode)
 except Exception:
     _xbox = None
+try:
+    import live_twin as _twinmod                 # live conduit reconstruction from axis positions
+    _twin = _twinmod.LiveTwin()
+except Exception:
+    _twinmod = None
+    _twin = None
 
 # --- configuration (env-overridable for production) ---------------------------
 PORT = int(os.environ.get("PORT", "5050"))
@@ -695,6 +701,72 @@ def api_machine_state():
         except Exception as e:
             axes[n] = f"ERR {e}"
     return {"ok": True, "live": True, "axes": axes}
+
+
+def _axis_units():
+    """steps-per-unit for the three geometry axes (from the calibration)."""
+    c = process.cal.CALIBRATION
+    return (c.get("advance_steps_per_mm") or 1.0,
+            c.get("bend_steps_per_deg") or 1.0,
+            c.get("rotate_steps_per_deg") or 1.0)
+
+
+@app.route("/api/machine/live", methods=["GET", "POST", "OPTIONS"])
+def api_machine_live():
+    """Live digital twin — polls the real axis positions (STATUS pos=), converts
+    steps->mm/deg with the calibration, folds them into the growing conduit shape,
+    and returns it so the 3-D viewer draws the pipe as the operator jogs it. Real
+    mode only (there's nothing to read in sim)."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if _mach is None or _twin is None:
+        return {"ok": True, "live": False, "available": False,
+                "reason": "Live twin unavailable on this server."}
+    if not _mach.LIVE:
+        return {"ok": True, "live": False, "available": False,
+                "reason": "Live twin needs the real machine (CONDUIT_MACHINE=real)."}
+    m = _mach.peek_real()
+    spm, bpd, rpd = _axis_units()
+
+    def read(axis):
+        try:
+            return _twinmod.parse_status(m.status(axis))
+        except Exception:
+            return {"state": "", "pos": None}
+
+    a, b, r = read("ADVANCE"), read("BEND"), read("ROTATE")
+    sq = read("SQUEEZE")
+    feed_mm = (a["pos"] or 0) / (spm or 1.0)
+    bend_deg = (b["pos"] or 0) / (bpd or 1.0)
+    roll_deg = (r["pos"] or 0) / (rpd or 1.0)
+    snap = _twin.update(feed_mm, bend_deg, roll_deg)
+    od = 21.3  # nominal 1/2" EMT for the visual (hand jogging carries no size)
+    snap["path"]["od_mm"] = od
+    snap["path"]["bend_radius_mm"] = round(process.br.ec.bend_radius_mm(od), 1)
+    snap.update(ok=True, live=True, available=True, calibrated=process.cal.CALIBRATED,
+                axes={"ADVANCE": a["state"], "BEND": b["state"],
+                      "ROTATE": r["state"], "SQUEEZE": sq["state"]})
+    return snap
+
+
+@app.route("/api/machine/zero", methods=["POST", "OPTIONS"])
+def api_machine_zero():
+    """Start a fresh live session: reset the twin and zero the axis position
+    references on the machine so the shape builds from a known origin."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    if _twin is not None:
+        _twin.reset()
+    zeroed = False
+    if _mach is not None and _mach.LIVE:
+        m = _mach.peek_real()
+        for ax in ("ADVANCE", "ROTATE", "BEND"):
+            try:
+                m.zero(ax)
+                zeroed = True
+            except Exception:
+                pass
+    return {"ok": True, "zeroed": zeroed}
 
 
 @app.route("/api/calibration", methods=["GET", "POST", "OPTIONS"])

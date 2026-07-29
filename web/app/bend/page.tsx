@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getMachineMode, runMachineProgram, machineEstop, getXbox, setXbox, getMachineState,
+  getMachineLive, machineZero,
   type MachineResult, type Command, type ManualBend, type MachineMode,
-  type XboxStatus, type MachineState } from "../../lib/api";
+  type XboxStatus, type MachineState, type LiveTwin } from "../../lib/api";
 import { AXES, freshAxes, applyCmd } from "../../lib/machine";
 import dynamic from "next/dynamic";
 
@@ -33,6 +34,7 @@ export default function BendBuilder() {
   const [estopped, setEstopped] = useState(false);
   const [xbox, setXboxState] = useState<XboxStatus | null>(null);
   const [mstate, setMstate] = useState<MachineState | null>(null);
+  const [twin, setTwin] = useState<LiveTwin | null>(null);
   const consoleRef = useRef<HTMLDivElement>(null);
   const diagRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +58,21 @@ export default function BendBuilder() {
   const toggleJog = useCallback(async (action: "start" | "stop") => {
     try { const x = await setXbox(action); setXboxState(x); }
     catch { alert("Couldn't reach the machine API."); }
+  }, []);
+
+  // While jogging, poll the live twin fast so the conduit forms as he moves.
+  const jogging = live && !!xbox?.running;
+  useEffect(() => {
+    if (!jogging) return;
+    let on = true;
+    const tick = () => { getMachineLive().then((d) => on && d.ok && setTwin(d)).catch(() => {}); };
+    tick();
+    const id = setInterval(tick, 350);
+    return () => { on = false; clearInterval(id); };
+  }, [jogging]);
+
+  const zeroAndStart = useCallback(async () => {
+    try { await machineZero(); setTwin(null); } catch { /* ignore */ }
   }, []);
 
   const run = useCallback(async () => {
@@ -241,6 +258,26 @@ export default function BendBuilder() {
                   </div>
                 );
               })}
+            </div>
+          )}
+          {jogging && (
+            <div style={{ marginTop: 14 }}>
+              <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+                <span className="muted" style={{ fontSize: 12 }}>
+                  LIVE SHAPE — forms as you jog{twin && twin.calibrated === false ? " · uncalibrated, relative scale" : ""}
+                </span>
+                <button className="btn ghost sm" onClick={zeroAndStart}>⦿ Zero &amp; start</button>
+              </div>
+              {twin?.path && twin.path.verts.length > 1
+                ? <Conduit3D verts={twin.path.verts} angles={twin.path.angles} cuts={twin.path.cuts}
+                    progress={1} od_mm={twin.path.od_mm} bend_radius_mm={twin.path.bend_radius_mm} />
+                : <div className="empty" style={{ height: 220 }}>Move the controller to start forming the conduit…</div>}
+              <div className="row" style={{ gap: 18, marginTop: 8, fontFamily: "var(--font-mono, ui-monospace, monospace)", fontSize: 12.5 }}>
+                <span className="muted">feed <b style={{ color: "var(--ink)" }}>{Math.round(twin?.feed_mm ?? 0)} mm</b></span>
+                <span className="muted">bend <b style={{ color: "var(--ink)" }}>{Math.round(twin?.bend_deg ?? 0)}°</b></span>
+                <span className="muted">roll <b style={{ color: "var(--ink)" }}>{Math.round(twin?.roll_deg ?? 0)}°</b></span>
+                <span className="muted">bends <b style={{ color: "var(--ink)" }}>{twin?.n_bends ?? 0}</b></span>
+              </div>
             </div>
           )}
           <div className="muted" style={{ fontSize: 12, marginTop: 12 }}>

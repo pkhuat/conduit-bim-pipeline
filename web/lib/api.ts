@@ -128,6 +128,19 @@ export const setXbox = (action: "start" | "stop") =>
     body: JSON.stringify({ action }),
   }).then(j<XboxStatus>);
 
+// Live digital twin: the conduit shape reconstructed from the machine's real axis
+// positions as the operator jogs (real mode).
+export type LiveTwin = {
+  ok: boolean; live: boolean; available?: boolean; reason?: string;
+  feed_mm?: number; bend_deg?: number; roll_deg?: number;
+  n_bends?: number; forming?: boolean; calibrated?: boolean;
+  path?: Path3D; axes?: Record<string, string>;
+};
+export const getMachineLive = () =>
+  fetch(`${API}/api/machine/live`, { method: "POST", cache: "no-store" }).then(j<LiveTwin>);
+export const machineZero = () =>
+  fetch(`${API}/api/machine/zero`, { method: "POST" }).then(j<{ ok: boolean; zeroed: boolean }>);
+
 export type Calibration = {
   calibrated: boolean; advance_steps_per_mm: number; rotate_steps_per_deg: number;
   bend_steps_per_deg: number; springback_factor: number; springback_offset_deg: number;

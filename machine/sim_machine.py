@@ -228,7 +228,10 @@ class SimMachine(Machine):
         valid = self.BOARD1_AXES if board == 1 else self.BOARD2_AXES
         if axis not in valid:
             return f"ERR UNKNOWN_CMD STATUS {axis}"
-        return "OK MOVING" if self.axes[axis]["jog_speed"] != 0 else "OK IDLE"
+        # Mirror the firmware's reply, which carries commanded position + torque
+        # (OK <state> torque=..% pos=..) so the live twin reads the sim the same way.
+        state = "MOVING" if self.axes[axis]["jog_speed"] != 0 else "IDLE"
+        return f"OK {state} torque=0% pos={int(round(self.axes[axis]['position']))}"
 
     def _zero(self, board, axis):
         if axis is None:
