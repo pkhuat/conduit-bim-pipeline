@@ -15,13 +15,14 @@ const Conduit3D = dynamic(() => import("../../components/Conduit3D"), {
 });
 
 const STANDARD = [22.5, 30, 45, 90];
+const MAX_BENDS = 12;
 const clampAngle = (v: number) => Math.max(0, Math.min(90, isNaN(v) ? 0 : v));
 const cell: React.CSSProperties = { width: 96, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border-2)", background: "var(--surface)", color: "var(--ink)", fontSize: 14 };
 
 export default function BendBuilder() {
   const [count, setCount] = useState(1);
   const [bends, setBends] = useState<ManualBend[]>(
-    Array.from({ length: 4 }, () => ({ angle: 45, roll: 0, distance: 12 })));
+    Array.from({ length: MAX_BENDS }, () => ({ angle: 45, roll: 0, distance: 12 })));
   const set = (i: number, k: keyof ManualBend, v: number) =>
     setBends((bs) => bs.map((b, j) => (j === i ? { ...b, [k]: v } : b)));
 
@@ -178,10 +179,11 @@ export default function BendBuilder() {
         <div className="row" style={{ gap: 10, marginBottom: 18 }}>
           <span className="muted" style={{ fontSize: 13 }}>Number of bends</span>
           <div className="seg">
-            {[1, 2, 3, 4].map((n) => (
-              <button key={n} className={count === n ? "on" : ""} onClick={() => setCount(n)}>{n}</button>
-            ))}
+            <button onClick={() => setCount((c) => Math.max(1, c - 1))} disabled={count <= 1} aria-label="Fewer bends">−</button>
+            <button className="on" style={{ cursor: "default", minWidth: 44 }}>{count}</button>
+            <button onClick={() => setCount((c) => Math.min(MAX_BENDS, c + 1))} disabled={count >= MAX_BENDS} aria-label="More bends">+</button>
           </div>
+          <span className="muted" style={{ fontSize: 12 }}>up to {MAX_BENDS}</span>
         </div>
 
         {count === 1 ? (

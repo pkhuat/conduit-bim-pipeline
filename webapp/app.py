@@ -561,8 +561,8 @@ def api_machine_manual():
         return {"ok": False, "error": "Machine simulator unavailable on this server."}, 503
     body = request.get_json(silent=True) or {}
     raw = body.get("bends")
-    if not isinstance(raw, list) or not (1 <= len(raw) <= 4):
-        return {"ok": False, "error": "Provide 1 to 4 bends."}, 400
+    if not isinstance(raw, list) or not (1 <= len(raw) <= 12):
+        return {"ok": False, "error": "Provide 1 to 12 bends."}, 400
     bends = []
     for b in raw:
         try:
@@ -597,8 +597,8 @@ def api_machine_preview():
         return ("", 204)
     body = request.get_json(silent=True) or {}
     raw = body.get("bends")
-    if not isinstance(raw, list) or not (1 <= len(raw) <= 4):
-        return {"ok": False, "error": "Provide 1 to 4 bends."}, 400
+    if not isinstance(raw, list) or not (1 <= len(raw) <= 12):
+        return {"ok": False, "error": "Provide 1 to 12 bends."}, 400
     bends = []
     for b in raw:
         try:
@@ -640,8 +640,8 @@ def api_machine_run():
         return {"ok": False, "error": "Machine driver unavailable on this server."}, 503
     body = request.get_json(silent=True) or {}
     raw = body.get("bends")
-    if not isinstance(raw, list) or not (1 <= len(raw) <= 4):
-        return {"ok": False, "error": "Provide 1 to 4 bends."}, 400
+    if not isinstance(raw, list) or not (1 <= len(raw) <= 12):
+        return {"ok": False, "error": "Provide 1 to 12 bends."}, 400
     bends = []
     for b in raw:
         try:
