@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { getMachineMode, runMachineProgram, machineEstop, getXbox, setXbox, getMachineState,
-  getMachineLive, machineZero,
+  getMachineLive, machineZero, previewBend,
   type MachineResult, type Command, type ManualBend, type MachineMode,
-  type XboxStatus, type MachineState, type LiveTwin } from "../../lib/api";
+  type XboxStatus, type MachineState, type LiveTwin, type BendPreview } from "../../lib/api";
 import { AXES, freshAxes, applyCmd } from "../../lib/machine";
 import dynamic from "next/dynamic";
 
@@ -35,12 +35,26 @@ export default function BendBuilder() {
   const [xbox, setXboxState] = useState<XboxStatus | null>(null);
   const [mstate, setMstate] = useState<MachineState | null>(null);
   const [twin, setTwin] = useState<LiveTwin | null>(null);
+  const [preview, setPreview] = useState<BendPreview | null>(null);
+  const [previewView3d, setPreviewView3d] = useState(true);
   const consoleRef = useRef<HTMLDivElement>(null);
   const diagRef = useRef<HTMLDivElement>(null);
+  const previewDiagRef = useRef<HTMLDivElement>(null);
 
   const live = !!mode?.live;
 
   useEffect(() => { getMachineMode().then(setMode).catch(() => setMode(null)); }, []);
+
+  // Live visualization: rebuild the shape (debounced) whenever the dimensions
+  // change — the bend appears as you type, no machine and no "Run" needed.
+  const activeBends = useMemo(() => bends.slice(0, count), [bends, count]);
+  useEffect(() => {
+    let on = true;
+    const id = setTimeout(() => {
+      previewBend(activeBends).then((p) => on && p.ok && setPreview(p)).catch(() => {});
+    }, 250);
+    return () => { on = false; clearTimeout(id); };
+  }, [activeBends]);
 
   // While live, poll the controller status + axis state so the manual panel is live.
   useEffect(() => {
@@ -138,7 +152,7 @@ export default function BendBuilder() {
     <main className="wrap">
       <div className="crumbs"><Link href="/">Jobs</Link> / New bend</div>
       <h1>Create a bend</h1>
-      <p className="sub">Build a bend program by hand and run it on the machine — no model needed.</p>
+      <p className="sub">Enter a custom bend and see it visualized in 3-D as you type — no model needed.</p>
 
       <div className={`machine-mode ${live ? "live" : "sim"}`}>
         <div className="mm-left">
@@ -227,6 +241,24 @@ export default function BendBuilder() {
           </span>
         </div>
       </div>
+
+      {(preview?.path || preview?.svg) && (
+        <div className="panel" style={{ marginTop: 14, padding: 12 }}>
+          <div className="row" style={{ justifyContent: "space-between", marginBottom: 8 }}>
+            <span className="muted" style={{ fontSize: 12 }}>
+              PREVIEW — updates as you type{preview?.length_ft ? ` · ${preview.length_ft} ft` : ""}{previewView3d ? " · drag to orbit" : ""}
+            </span>
+            <div className="seg">
+              <button className={previewView3d ? "on" : ""} onClick={() => setPreviewView3d(true)} disabled={!preview?.path}>3D</button>
+              <button className={!previewView3d ? "on" : ""} onClick={() => setPreviewView3d(false)} disabled={!preview?.svg}>2D</button>
+            </div>
+          </div>
+          {previewView3d && preview?.path
+            ? <Conduit3D verts={preview.path.verts} angles={preview.path.angles} cuts={preview.path.cuts}
+                progress={1} od_mm={preview.path.od_mm} bend_radius_mm={preview.path.bend_radius_mm} />
+            : <div className="diagram" ref={previewDiagRef} dangerouslySetInnerHTML={{ __html: preview?.svg || "" }} />}
+        </div>
+      )}
 
       {live && (
         <div className="panel" style={{ marginTop: 14 }}>

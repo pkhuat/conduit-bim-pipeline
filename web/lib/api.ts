@@ -81,6 +81,15 @@ export const setSize = (stem: string, run: number, od_mm: number) =>
   }).then(j<JobDetail>);
 
 export type ManualBend = { angle: number; roll: number; distance: number };
+
+// Geometry-only preview of a custom bend — the shape as you type, no machine.
+export type BendPreview = { ok: boolean; svg: string | null; path: Path3D | null; length_ft?: number; error?: string };
+export const previewBend = (bends: ManualBend[]) =>
+  fetch(`${API}/api/machine/preview`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bends }),
+  }).then(j<BendPreview>);
+
 export const runManual = (bends: ManualBend[]) =>
   fetch(`${API}/api/machine/manual`, {
     method: "POST",

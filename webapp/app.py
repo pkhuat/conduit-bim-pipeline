@@ -587,6 +587,35 @@ def api_machine_manual():
             "counts": {"commands": len(machine.history), "warnings": len(machine.warnings), "sticks": 1}}
 
 
+@app.route("/api/machine/preview", methods=["POST", "OPTIONS"])
+def api_machine_preview():
+    """Geometry-only preview of a hand-built bend program — the 3-D path + 2-D
+    diagram, with NO machine involved. Powers the live visualization as the user
+    types the dimensions (so the shape appears like the IFC view does on import).
+    Pure math, so it works on the cloud/sim deploy too."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+    body = request.get_json(silent=True) or {}
+    raw = body.get("bends")
+    if not isinstance(raw, list) or not (1 <= len(raw) <= 4):
+        return {"ok": False, "error": "Provide 1 to 4 bends."}, 400
+    bends = []
+    for b in raw:
+        try:
+            angle = float(b.get("angle"))
+            roll = float(b.get("roll") or 0)
+            dist_in = float(b.get("distance") or 0)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "Each bend needs a numeric angle."}, 400
+        if not (0 <= angle <= 90):
+            return {"ok": False, "error": "Each bend angle must be between 0 and 90°."}, 400
+        bends.append({"advance": round(dist_in * 25.4, 1), "angle": angle,
+                      "rotate": abs(roll), "roll_dir": 1 if roll > 0 else -1 if roll < 0 else 0})
+    svg, path = _manual_geometry(bends)
+    return {"ok": True, "svg": svg, "path": path,
+            "length_ft": round(sum(b["advance"] for b in bends) / 304.8, 2)}
+
+
 @app.route("/api/machine/mode")
 def api_machine_mode():
     """Whether this server drives the REAL machine or the simulator, plus the
