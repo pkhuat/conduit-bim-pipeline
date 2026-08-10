@@ -8,7 +8,9 @@ import * as THREE from "three";
 export type Path3D = { verts: number[][]; angles: number[]; cuts?: number[]; od_mm?: number | null; bend_radius_mm?: number | null };
 type Props = Path3D & { progress?: number };
 
-const STICK_COLORS = ["#2f9bd6", "#8a6cf0", "#e0a53a", "#37b3ab", "#ee7b3a", "#d24d9a", "#7c8ba0"];
+// Galvanized-conduit shades, alternated per 10-ft stick so it reads as real
+// pipe while you can still tell one stick from the next.
+const STICK_METAL = ["#c2cacc", "#a9b2b4"];
 const seglen = (a: number[], b: number[]) => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
@@ -181,7 +183,7 @@ function Scene({ verts, angles, cuts, progress = 1, odMm, bendRadiusMm, dims, fi
       <group>
         {geoms.map((g, i) => g && (
           <mesh key={i} geometry={g}>
-            <meshStandardMaterial color={STICK_COLORS[i % STICK_COLORS.length]} metalness={0.55} roughness={0.35} />
+            <meshStandardMaterial color={STICK_METAL[i % STICK_METAL.length]} metalness={0.82} roughness={0.38} />
           </mesh>
         ))}
         {couplers.map((cp, i) => cp.frac <= progress && (
@@ -220,14 +222,15 @@ function Scene({ verts, angles, cuts, progress = 1, odMm, bendRadiusMm, dims, fi
               <sphereGeometry args={[hovered === i ? markR * 1.4 : markR, 18, 18]} />
               <meshStandardMaterial color={hovered === i ? "#ffd24d" : "#ff5a4d"} emissive="#611" emissiveIntensity={0.35} />
             </mesh>
-            {hovered === i && (
-              <Html center distanceFactor={10} zIndexRange={[100, 0]} style={{ pointerEvents: "none" }}>
-                <div style={{ transform: "translateY(-150%)", background: "rgba(13,20,19,.92)", padding: "3px 9px", borderRadius: 8, fontFamily: "var(--font-mono, monospace)", border: "1px solid #00c2cb88", whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.3, boxShadow: "0 4px 14px rgba(0,0,0,.5)" }}>
-                  <div style={{ color: "#eafcff", fontSize: 13, fontWeight: 600 }}>bend {i + 1}: {angles[i]}&deg;</div>
-                  {rolls[i] ? <div style={{ color: "#5fdbe3", fontSize: 11 }}>roll {rolls[i]}&deg;</div> : null}
-                </div>
-              </Html>
-            )}
+            {/* angle (and roll) labeled on every bend, always visible — the number
+                a contractor needs to read at a glance */}
+            <Html center distanceFactor={hovered === i ? 8 : 11} zIndexRange={[100, 0]} style={{ pointerEvents: "none" }}>
+              <div style={{ transform: "translateY(-160%)", background: "rgba(13,20,19,.9)", padding: "3px 10px", borderRadius: 8, fontFamily: "var(--font-mono, monospace)", border: "1px solid #ff8a4d77", whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.25, boxShadow: "0 3px 12px rgba(0,0,0,.55)" }}>
+                <span style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>{angles[i]}&deg;</span>
+                {rolls[i] ? <span style={{ color: "#5fdbe3", fontSize: 11.5, marginLeft: 6 }}>&#8635;&nbsp;{rolls[i]}&deg; roll</span> : null}
+                <div style={{ color: "#8fb0ab", fontSize: 9, letterSpacing: ".08em", marginTop: 1 }}>BEND {i + 1}</div>
+              </div>
+            </Html>
           </group>
         ))}
       </group>
@@ -236,7 +239,7 @@ function Scene({ verts, angles, cuts, progress = 1, odMm, bendRadiusMm, dims, fi
 }
 
 export default function Conduit3D({ verts, angles, cuts, progress = 1, od_mm, bend_radius_mm }: Props) {
-  const [dims, setDims] = useState(false);
+  const [dims, setDims] = useState(true);
   const [view, setView] = useState<{ dir: string; k: number } | null>(null);
   const [fitK, setFitK] = useState(0);
   if (!verts || verts.length < 2) return <div style={{ padding: 24, color: "var(--muted)", fontSize: 13 }}>No 3-D path for this run.</div>;
@@ -268,7 +271,7 @@ export default function Conduit3D({ verts, angles, cuts, progress = 1, od_mm, be
       </div>
 
       <div style={{ position: "absolute", left: 12, bottom: 10, fontSize: 11.5, color: "#7fa39f", fontFamily: "var(--font-mono, monospace)", pointerEvents: "none", lineHeight: 1.5 }}>
-        drag to orbit &middot; each color = one 10-ft stick &middot; silver collar = cut &amp; couple by hand<br />hover a bend for angle &amp; roll &middot; <b style={{ color: dims ? "#7fe" : "#7fa39f" }}>dims</b> shows lengths
+        drag to orbit &middot; angle is labeled at every bend &middot; silver collar = cut &amp; couple by hand<br />numbers = straight-run lengths (toggle <b style={{ color: dims ? "#7fe" : "#7fa39f" }}>dims</b>) &middot; top / front / side change the view
       </div>
     </div>
   );
