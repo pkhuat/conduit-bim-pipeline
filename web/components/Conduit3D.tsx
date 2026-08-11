@@ -222,15 +222,22 @@ function Scene({ verts, angles, cuts, progress = 1, odMm, bendRadiusMm, dims, fi
               <sphereGeometry args={[hovered === i ? markR * 1.4 : markR, 18, 18]} />
               <meshStandardMaterial color={hovered === i ? "#ffd24d" : "#ff5a4d"} emissive="#611" emissiveIntensity={0.35} />
             </mesh>
-            {/* angle (and roll) labeled on every bend, always visible — the number
-                a contractor needs to read at a glance */}
-            <Html center distanceFactor={hovered === i ? 8 : 11} zIndexRange={[100, 0]} style={{ pointerEvents: "none" }}>
-              <div style={{ transform: "translateY(-160%)", background: "rgba(13,20,19,.9)", padding: "3px 10px", borderRadius: 8, fontFamily: "var(--font-mono, monospace)", border: "1px solid #ff8a4d77", whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.25, boxShadow: "0 3px 12px rgba(0,0,0,.55)" }}>
-                <span style={{ color: "#fff", fontSize: 15, fontWeight: 700 }}>{angles[i]}&deg;</span>
-                {rolls[i] ? <span style={{ color: "#5fdbe3", fontSize: 11.5, marginLeft: 6 }}>&#8635;&nbsp;{rolls[i]}&deg; roll</span> : null}
-                <div style={{ color: "#8fb0ab", fontSize: 9, letterSpacing: ".08em", marginTop: 1 }}>BEND {i + 1}</div>
-              </div>
-            </Html>
+            {/* always-on: a small angle chip so every bend reads at a glance.
+                on hover: the full detail (roll + bend number), enlarged. keeping
+                the always-on chip tiny stops the labels piling up on dense runs. */}
+            {hovered === i ? (
+              <Html center distanceFactor={9} zIndexRange={[130, 0]} style={{ pointerEvents: "none" }}>
+                <div style={{ transform: "translateY(-165%)", background: "rgba(13,20,19,.95)", padding: "3px 10px", borderRadius: 8, fontFamily: "var(--font-mono, monospace)", border: "1px solid #00c2cb99", whiteSpace: "nowrap", textAlign: "center", lineHeight: 1.25, boxShadow: "0 4px 14px rgba(0,0,0,.55)" }}>
+                  <span style={{ color: "#eafcff", fontSize: 14, fontWeight: 700 }}>{angles[i]}&deg;</span>
+                  {rolls[i] ? <span style={{ color: "#5fdbe3", fontSize: 11, marginLeft: 6 }}>&#8635;&nbsp;{rolls[i]}&deg; roll</span> : null}
+                  <div style={{ color: "#8fb0ab", fontSize: 9, letterSpacing: ".08em", marginTop: 1 }}>BEND {i + 1}</div>
+                </div>
+              </Html>
+            ) : (
+              <Html center distanceFactor={17} zIndexRange={[60, 0]} style={{ pointerEvents: "none" }}>
+                <span style={{ transform: "translateY(-150%)", display: "inline-block", background: "rgba(13,20,19,.78)", color: "#fff", padding: "0 5px", borderRadius: 5, fontFamily: "var(--font-mono, monospace)", fontSize: 12, fontWeight: 700, border: "1px solid #ff8a4d55", whiteSpace: "nowrap" }}>{angles[i]}&deg;</span>
+              </Html>
+            )}
           </group>
         ))}
       </group>
@@ -271,7 +278,7 @@ export default function Conduit3D({ verts, angles, cuts, progress = 1, od_mm, be
       </div>
 
       <div style={{ position: "absolute", left: 12, bottom: 10, fontSize: 11.5, color: "#7fa39f", fontFamily: "var(--font-mono, monospace)", pointerEvents: "none", lineHeight: 1.5 }}>
-        drag to orbit &middot; angle is labeled at every bend &middot; silver collar = cut &amp; couple by hand<br />numbers = straight-run lengths (toggle <b style={{ color: dims ? "#7fe" : "#7fa39f" }}>dims</b>) &middot; top / front / side change the view
+        drag to orbit &middot; angle shown at every bend (hover for roll) &middot; silver collar = cut &amp; couple by hand<br />numbers = straight-run lengths (toggle <b style={{ color: dims ? "#7fe" : "#7fa39f" }}>dims</b>) &middot; top / front / side change the view
       </div>
     </div>
   );
